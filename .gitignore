@@ -1,0 +1,32 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+*.log
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Node / Vue
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Env & OS
+.env
+.env.local
+.DS_Store
+
+# Keep empty project folders
+!data/.gitkeep
+!data/assets/.gitkeep
+!docs/.gitkeep
+!agent/.gitkeep
+!mcp/.gitkeep
+!backend/.gitkeep
