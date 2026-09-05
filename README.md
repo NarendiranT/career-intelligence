@@ -6,18 +6,16 @@ AI-powered career assistant. Upload a resume, add job descriptions, and get skil
 
 ```text
 career-intelligence/
-├── frontend/   Vue 3 app (this is the only implemented surface so far)
-├── backend/    API (not started)
-├── agent/      LangGraph / agent graph (not started)
-├── mcp/        MCP tools (not started)
-├── data/       Local data and assets
-│   └── assets/
+├── frontend/   Vue 3 app (JWT session; dashboard is mocked data)
+├── backend/    FastAPI + SQLModel (documents + chat)
+├── agent/      LangGraph indexing and RAG graphs
+├── mcp/        MCP-style tools
+├── alembic/    Postgres migrations
+├── data/       Local uploads
 └── docs/       Design and architecture notes
 ```
 
 ## Frontend
-
-Vue 3 + Vite + TypeScript + Tailwind CSS.
 
 ```bash
 cd frontend
@@ -25,9 +23,50 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 for **Create Your Account**, or http://localhost:5173/signin to **Sign In**.
+Open http://localhost:5173
+
+## Backend
+
+Requires **Python 3.12+**, **Docker** (Postgres 16 + pgvector), and an **OpenAI API key** for indexing and chat.
+
+1. Copy env and fill secrets (repo root):
+
+```bash
+cp .env.example .env
+```
+
+Set at least:
+
+- `OPENAI_API_KEY` — required for document indexing and RAG chat
+- `JWT_SECRET` — change from the example value; used to sign login tokens
+
+`DATABASE_URL` already matches Docker Compose (`career` / `career` / `career_intelligence` on port **5432**).
+
+2. Start Postgres, then install and migrate:
+
+```bash
+docker compose up -d
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+alembic upgrade head
+```
+
+Wait until Postgres is healthy (`docker compose ps`) before `alembic upgrade head`.
+
+3. Run the API:
+
+```bash
+uvicorn backend.app:app --reload --port 8000
+```
+
+- Health: http://localhost:8000/health  
+- Docs: http://localhost:8000/docs  
+
+Register or login (`POST /v1/auth/register` or `/v1/auth/login`) and send `Authorization: Bearer <token>` on `/v1/documents` and `/v1/chat`. In local dev the Vue app should leave `VITE_API_BASE_URL` empty so Vite proxies `/v1` to this API (see `frontend/.env.example`).
+
+See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples.
 
 ## Status
 
-- Frontend: sign-up and sign-in pages
-- Backend, agent, and MCP: folders only, no source yet
+- Frontend: signup/signin JWT session, guarded dashboard (upload/chat still mocked)
+- Backend: email/password JWT, indexing + RAG agents, Postgres/pgvector, FastAPI upload and chat/SSE

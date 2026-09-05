@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ChevronDown, ChevronRight, Lightbulb, Shield, Target } from '@lucide/vue'
+import { Check, ChevronRight, Lightbulb, Shield, Target } from '@lucide/vue'
 
 const tips = [
   'Use the most recent version of your resume',
@@ -18,7 +18,7 @@ const nextSteps = [
 </script>
 
 <template>
-  <aside class="hidden w-[300px] shrink-0 space-y-4 self-start xl:sticky xl:top-8 xl:block">
+  <aside class="flex h-full w-[300px] shrink-0 flex-col space-y-4 overflow-y-auto bg-white p-4">
     <section class="overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-sm">
       <header class="flex items-center justify-between bg-amber-50 px-4 py-3">
         <div class="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -27,7 +27,6 @@ const nextSteps = [
           </span>
           Tips for better results
         </div>
-        <ChevronDown class="h-4 w-4 text-slate-400" />
       </header>
       <ul class="space-y-2.5 px-4 py-3.5">
         <li v-for="tip in tips" :key="tip" class="flex items-start gap-2 text-[13px] leading-snug text-slate-600">

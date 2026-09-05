@@ -1,0 +1,11 @@
+Platform Engineer
+Example Labs
+
+Requirements:
+- Python and FastAPI
+- PostgreSQL and vector search
+- Experience with LLM applications
+
+Responsibilities:
+- Own retrieval pipelines
+- Partner with product on career-assistant features

@@ -3,8 +3,7 @@ import { ref } from 'vue'
 import { ArrowRight, Briefcase, CircleAlert, FileText } from '@lucide/vue'
 import type { UploadedDoc } from '@/types/upload'
 import { toUploadedDoc } from '@/types/upload'
-import AppSidebar from '@/components/layout/AppSidebar.vue'
-import AppTopBar from '@/components/layout/AppTopBar.vue'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import DropZone from '@/components/upload/DropZone.vue'
 import UploadedFileRow from '@/components/upload/UploadedFileRow.vue'
 import UploadInfoSidebar from '@/components/upload/UploadInfoSidebar.vue'
@@ -77,15 +76,9 @@ function addPastedJob() {
 </script>
 
 <template>
-  <div class="flex h-dvh overflow-hidden bg-[#f5f7fb]">
-    <AppSidebar />
-
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <AppTopBar />
-
-      <div id="upload-scroll" class="min-h-0 flex-1 overflow-y-auto">
-        <div class="flex items-start gap-6 p-6 xl:p-8">
-        <main class="min-w-0 flex-1">
+  <DashboardLayout>
+    <div id="upload-scroll" class="h-full overflow-y-auto p-6 xl:p-8">
+        <main class="min-w-0">
           <p class="text-[11px] font-semibold tracking-[0.16em] text-slate-400">UPLOAD DOCUMENTS</p>
           <h1 class="mt-2 text-[1.85rem] font-extrabold tracking-tight text-slate-900">
             Add Your Resume and Job Descriptions
@@ -217,10 +210,10 @@ function addPastedJob() {
             </button>
           </footer>
         </main>
-
-        <UploadInfoSidebar />
-        </div>
-      </div>
     </div>
-  </div>
+
+    <template #right>
+      <UploadInfoSidebar />
+    </template>
+  </DashboardLayout>
 </template>

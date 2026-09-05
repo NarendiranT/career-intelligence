@@ -1,19 +1,38 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Eye, EyeOff, Lock, Mail } from '@lucide/vue'
+import { ApiError } from '@/api/client'
+import { safeNextPath, useAuth } from '@/composables/useAuth'
 import FormInput from '@/components/signup/FormInput.vue'
 import SocialButton from '@/components/signup/SocialButton.vue'
+
+const route = useRoute()
+const router = useRouter()
+const { login } = useAuth()
 
 const email = ref('')
 const password = ref('')
 const remember = ref(false)
 const showPassword = ref(false)
 const submitted = ref(false)
+const pending = ref(false)
+const serverError = ref('')
 
-function onSubmit() {
+async function onSubmit() {
   submitted.value = true
+  serverError.value = ''
   if (!email.value.trim() || !password.value) {
     return
+  }
+  pending.value = true
+  try {
+    await login(email.value, password.value, remember.value)
+    await router.replace(safeNextPath(route.query.next))
+  } catch (error) {
+    serverError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
+  } finally {
+    pending.value = false
   }
 }
 </script>
@@ -33,8 +52,8 @@ function onSubmit() {
         </p>
 
         <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SocialButton provider="google" label="Sign in with Google" />
-          <SocialButton provider="microsoft" label="Sign in with Microsoft" />
+          <SocialButton provider="google" label="Sign in with Google" disabled />
+          <SocialButton provider="microsoft" label="Sign in with Microsoft" disabled />
         </div>
 
         <div class="my-6 flex items-center gap-3">
@@ -93,11 +112,14 @@ function onSubmit() {
             <a class="font-medium text-brand hover:underline" href="#">Forgot password?</a>
           </div>
 
+          <p v-if="serverError" class="text-sm text-red-500">{{ serverError }}</p>
+
           <button
-            class="mt-2 w-full rounded-xl bg-brand py-3 text-[15px] font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+            class="mt-2 w-full rounded-xl bg-brand py-3 text-[15px] font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-70"
             type="submit"
+            :disabled="pending"
           >
-            Sign In
+            {{ pending ? 'Signing in…' : 'Sign In' }}
           </button>
         </form>
       </div>

@@ -1,0 +1,12 @@
+Jane Candidate
+Senior Software Engineer
+
+Skills: Python, FastAPI, PostgreSQL, LangGraph, Vue
+
+Experience
+Acme Corp — Senior Software Engineer (2021-2025)
+- Built document ingestion pipelines and REST APIs
+- Improved retrieval quality for internal search
+
+Education
+State University — B.S. Computer Science

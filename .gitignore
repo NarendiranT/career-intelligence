@@ -26,7 +26,12 @@ frontend/.vite/
 # Keep empty project folders
 !data/.gitkeep
 !data/assets/.gitkeep
+!data/uploads/.gitkeep
 !docs/.gitkeep
 !agent/.gitkeep
 !mcp/.gitkeep
 !backend/.gitkeep
+
+data/uploads/**
+!data/uploads/.gitkeep
+

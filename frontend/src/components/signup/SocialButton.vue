@@ -2,13 +2,16 @@
 defineProps<{
   provider: 'google' | 'microsoft'
   label: string
+  disabled?: boolean
 }>()
 </script>
 
 <template>
   <button
-    class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
+    class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
     type="button"
+    :disabled="disabled"
+    :title="disabled ? 'Coming soon' : undefined"
   >
     <svg v-if="provider === 'google'" class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
       <path

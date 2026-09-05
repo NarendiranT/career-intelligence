@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Eye, EyeOff, Lock, Mail, User } from '@lucide/vue'
+import { ApiError } from '@/api/client'
+import { safeNextPath, useAuth } from '@/composables/useAuth'
 import FormInput from './FormInput.vue'
 import SocialButton from './SocialButton.vue'
+
+const route = useRoute()
+const router = useRouter()
+const { register } = useAuth()
 
 const fullName = ref('')
 const email = ref('')
@@ -12,6 +19,8 @@ const agreed = ref(false)
 const showPassword = ref(false)
 const showConfirm = ref(false)
 const submitted = ref(false)
+const pending = ref(false)
+const serverError = ref('')
 
 const passwordHint = 'Minimum 8 characters with letters, numbers and a symbol'
 
@@ -21,10 +30,20 @@ const passwordOk = computed(() => {
 
 const passwordsMatch = computed(() => password.value.length > 0 && password.value === confirmPassword.value)
 
-function onSubmit() {
+async function onSubmit() {
   submitted.value = true
+  serverError.value = ''
   if (!fullName.value.trim() || !email.value.trim() || !passwordOk.value || !passwordsMatch.value || !agreed.value) {
     return
+  }
+  pending.value = true
+  try {
+    await register(fullName.value, email.value, password.value)
+    await router.replace(safeNextPath(route.query.next))
+  } catch (error) {
+    serverError.value = error instanceof ApiError ? error.message : 'Could not create your account.'
+  } finally {
+    pending.value = false
   }
 }
 </script>
@@ -44,8 +63,8 @@ function onSubmit() {
         </p>
 
         <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SocialButton provider="google" label="Sign up with Google" />
-          <SocialButton provider="microsoft" label="Sign up with Microsoft" />
+          <SocialButton provider="google" label="Sign up with Google" disabled />
+          <SocialButton provider="microsoft" label="Sign up with Microsoft" disabled />
         </div>
 
         <div class="my-6 flex items-center gap-3">
@@ -144,11 +163,14 @@ function onSubmit() {
           </label>
           <p v-if="submitted && !agreed" class="text-xs text-red-500">Please accept the terms to continue.</p>
 
+          <p v-if="serverError" class="text-sm text-red-500">{{ serverError }}</p>
+
           <button
-            class="mt-2 w-full rounded-xl bg-brand py-3 text-[15px] font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+            class="mt-2 w-full rounded-xl bg-brand py-3 text-[15px] font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-70"
             type="submit"
+            :disabled="pending"
           >
-            Create Account
+            {{ pending ? 'Creating account…' : 'Create Account' }}
           </button>
         </form>
       </div>
