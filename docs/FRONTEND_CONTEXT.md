@@ -6,7 +6,7 @@ This document describes the **implemented** Vue frontend as of the current sourc
 **App code:** `frontend/`  
 **This file:** `docs/FRONTEND_CONTEXT.md`
 
-Auth (register/login/`/me`) is wired to FastAPI with a JWT stored in `localStorage`. Home loads `GET /v1/home`. Upload posts files to `POST /v1/documents` then navigates to My Documents (`GET /v1/documents`). Indexing status arrives on `WS /v1/ws/documents?token=…`. Chat UI is still mocked.
+Auth (register/login/`/me`) is wired to FastAPI with a JWT stored in `localStorage`. Home loads `GET /v1/home`. Upload posts files to `POST /v1/documents` then navigates to My Documents (`GET /v1/documents`). Indexing status arrives on `WS /v1/ws/documents?token=…`. Chat loads those documents and streams RAG answers on `WS /v1/ws/chat?token=…`.
 
 ---
 
@@ -18,7 +18,7 @@ Career Intelligence is intended as an AI career assistant: users upload a resume
 
 ### Current frontend scope
 
-Dashboard routes plus 404 and maintenance exist. Auth, home, upload, and My Documents are live; chat and interview practice are still local UI.
+Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Documents, and chat-with-assistant are live; interview practice is still local UI.
 
 | Implemented UI | Backend wired? |
 | --- | --- |
@@ -28,7 +28,7 @@ Dashboard routes plus 404 and maintenance exist. Auth, home, upload, and My Docu
 | Upload documents | Yes (`POST /v1/documents` per file; Continue then `/documents`) |
 | My Documents | Yes (`GET /v1/documents` + `WS /v1/ws/documents`) |
 | Analysis & Insights | No (coming-soon page only) |
-| Chat with assistant | No (local `ref` arrays + fake assistant replies) |
+| Chat with assistant | Yes (`GET /v1/documents` + `WS /v1/ws/chat`; token usage on `chat.done`) |
 | Prepare for Interviews | No (local topic chat + settings; no interview API) |
 
 There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api/client.ts`). Leave `VITE_API_BASE_URL` empty to use the Vite `/v1` proxy. Dashboard routes use `meta.requiresAuth`.
@@ -41,7 +41,7 @@ There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api
 4. **Upload** (`/upload`): dashboard chrome. Empty resume/JD lists until the user adds files (multiple of each). **View sample** opens a PDF modal. **Continue** uploads every pending file then goes to `/documents`.
 5. **My Documents** (`/documents`): two tabs (resumes / job descriptions), search, 10-per-page pagination. Loaded from `GET /v1/documents`; status badges update over the document WebSocket.
 6. **Analysis** (`/analysis`): coming-soon placeholder.
-7. **Chat** (`/chat`): dashboard chrome. Seeded conversation. Sending a message appends a user bubble and an immediately fabricated assistant bubble. Resume/JD picks live in the right panel and are **not** loaded from the upload page.
+7. **Chat** (`/chat`): dashboard chrome. Empty thread until the user asks. Resume/JD picks load from `GET /v1/documents` (processed files only). Asking sends `chat.ask` on `WS /v1/ws/chat` with chat settings; the assistant reply streams as `chat.token` frames then `chat.done` (including token usage).
 8. **Prepare for Interviews** (`/interview`): dashboard chrome with Interview Topics in the left nav (above Settings). Topic chat is local until an interview API exists.
 
 Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
@@ -62,7 +62,7 @@ Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 | State | Component `ref` / `computed` / `defineModel`; module composables `useSidebar`, `useAuth`, `useToast` |
 | API client | `frontend/src/api/client.ts` (`fetch` + Bearer token) |
 | Auth | Email/password JWT in `localStorage` key `ci.accessToken`; no OAuth SDK |
-| WebSocket / SSE | Document status WebSocket (`useDocumentRealtime`); chat SSE not used |
+| WebSocket / SSE | Document status WebSocket (`useDocumentRealtime`); chat RAG WebSocket (`useChatRealtime`) |
 | Tests | **None** in `frontend/` |
 
 Path alias: `@` → `frontend/src` (`vite.config.ts` and `tsconfig.app.json`).
@@ -100,7 +100,7 @@ career-intelligence/
         ├── style.css
         ├── vite-env.d.ts
         ├── router/index.ts
-        ├── api/client.ts, token.ts, auth.ts
+        ├── api/client.ts, token.ts, auth.ts, home.ts, documents.ts, conversations.ts
         ├── composables/useSidebar.ts, useAuth.ts, useToast.ts, useInterview.ts, useDocumentRealtime.ts
         ├── types/upload.ts, chat.ts, auth.ts
         ├── views/
@@ -123,7 +123,7 @@ career-intelligence/
 | `frontend/src/components/chat/` | Messages, composer, right context/settings panel |
 | `frontend/src/components/interview/` | Interview messages, composer, right settings panel |
 | `frontend/src/types/` | Auth, home, documents, upload, chat, and interview TypeScript types |
-| `frontend/src/composables/` | `useSidebar`, `useAuth`, `useToast`, `useInterview`, `useDocumentRealtime` |
+| `frontend/src/composables/` | `useSidebar`, `useAuth`, `useToast`, `useInterview`, `useDocumentRealtime`, `useChatRealtime` |
 | `frontend/public/` | Static assets: `/favicon.svg`, `/samples/*.pdf` |
 
 `App.vue` mounts `AppToasts` (top-of-viewport notifications) and `<RouterView />`.
@@ -179,8 +179,9 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 ### `/chat` — `chat` — `frontend/src/views/ChatView.vue`
 
 - `DashboardLayout` with `show-recent-chats` and `#right` = `ChatRightPanel`.
-- Seeded thread; `send()` pushes fake replies.
-- **Status:** UI complete as a demo; not connected to a model or document store.
+- Empty thread; `send()` requires a processed resume and at least one processed job, then asks the RAG agent over the chat WebSocket.
+- Chat Settings (temperature, top-p, max tokens, stream, system prompt, model) are sent with each `chat.ask`. Web search is toggled from the composer globe. Resume/JD picks are restored per conversation (`resume_id` / `job_ids` on `GET /v1/conversations/{id}` plus `localStorage`). Sources open `GET /v1/documents/{id}/file` in the sample PDF modal.
+- **Status:** Wired to documents list + `WS /v1/ws/chat`.
 
 ### `/interview` — `interview` — `frontend/src/views/InterviewView.vue`
 
@@ -219,8 +220,8 @@ Slots: default (main), `right` (optional).
 Uses `useSidebar()`. Viewport: `h-dvh overflow-hidden`. Left nav + top bar + main + optional right column. Main does not scroll the window; children must scroll internally.
 
 **`AppSidebar.vue`**  
-Props: `collapsed`, `showRecentChats`, `showInterviewTopics`. Emit: `toggle`.  
-Nav items listed above. Active state: `route.path === item.to`. Collapsed width `w-16`, expanded `w-64`. Collapsed logo: hover shows `PanelLeftOpen`, click expands. Expanded: `PanelLeftClose` next to brand. Chat-only recent chats are **hardcoded** strings, not wired to `ChatView` messages. **New Chat** has no handler. On `/interview`, Interview Topics (search + list from `useInterview`) render **above** Settings / Help.
+Props: `collapsed`, `showRecentChats`, `showInterviewTopics`, `recentChats?`, `activeConversationId?`. Emit: `toggle`, `selectConversation`, `newChat`.  
+Nav items listed above. Active state: `route.path === item.to`. Collapsed width `w-16`, expanded `w-64`. Collapsed logo: hover shows `PanelLeftOpen`, click expands. Expanded: `PanelLeftClose` next to brand. Chat-only recent chats come from `GET /v1/conversations` and highlight the open thread. **New Chat** clears the thread. On `/interview`, Interview Topics (search + list from `useInterview`) render **above** Settings / Help.
 
 **`AppTopBar.vue`**  
 No props. Bell (decorative red dot) and the authenticated user’s name/initials from `useAuth`. Dropdown: **Log out** (clears JWT, `POST /v1/auth/logout`, then `/signin`).
@@ -251,9 +252,9 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 ### Chat
 
-**`ChatMessage.vue`** — Prop: `message: ChatMessage`. User: JD avatar + blue bubble. Assistant: sparkle avatar, copy/thumbs buttons (no handlers), optional `strengths` / `gaps` / `sources`.
+**`ChatMessage.vue`** — Prop: `message: ChatMessage`. User avatar uses the signed-in user’s initials (`useAuth`). Assistant: sparkle avatar, copy (clipboard + toast), thumbs up/down (local, persisted in `localStorage`). Optional `strengths` / `gaps` / `sources` (filename + icon; click opens the source file in the sample-style modal), and token usage when `usage.tokens > 0`. Shows “Thinking…” while `pending` and a caret while tokens stream.
 
-**`ChatComposer.vue`** — `v-model:draft`, `v-model:model`. Enter sends (no Shift+Enter special case). Paperclip and globe buttons have no handlers. Model options: `deep-research`, `gpt-4o`, `claude-3.5`, `gemini-pro`. Send disabled when draft is empty.
+**`ChatComposer.vue`** — `v-model:draft`, `v-model:model`, `v-model:webSearch`, `disabled?`. Enter sends. Paperclip is disabled. Globe toggles internet/web search for the next ask. Model options: `deep-research` (enabled), `gpt-4o` / `claude-3.5` / `gemini-pro` (disabled). Send disabled when draft is empty or `disabled`.
 
 ### Interview
 
@@ -263,7 +264,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`InterviewRightPanel.vue`** — mode, style, difficulty, three checkboxes, session context, clear chat, pro tip.
 
-**`ChatRightPanel.vue`** — `defineModel`s: `tab`, `resumeId`, `jobIds`, `temperature`, `topP`, `maxTokens`, `model`, `stream`, `webSearch`, `systemPrompt`. Emit: `ask(question: string)`. Documents come from `documentLibrary` in `types/chat.ts`, **not** from `UploadView`. Tabs: Selected Documents | Chat Settings.
+**`ChatRightPanel.vue`** — `defineModel`s: `tab`, `resumeId`, `jobIds`, `temperature`, `topP`, `maxTokens`, `model`, `stream`, `systemPrompt`. Props: `documents: ApiDocument[]`, `loading?`. Emit: `ask(question: string)`. Processed resumes and jobs from `GET /v1/documents`. Tabs: Selected Documents | Chat Settings. Web search lives on the composer globe, not in settings. Extra models in the settings dropdown are disabled.
 
 ---
 
@@ -313,19 +314,15 @@ JWT Bearer tokens from FastAPI. Token key: `ci.accessToken`. Session state: `use
 
 ## 8. API integration
 
-Auth, home, upload, and documents list. Base URL: `VITE_API_BASE_URL` (`frontend/.env.example`; empty = same-origin Vite proxy to port 8000, including WebSockets). Chat still uses local mock data.
+Auth, home, upload, documents list, and chat. Base URL: `VITE_API_BASE_URL` (`frontend/.env.example`; empty = same-origin Vite proxy to port 8000, including WebSockets). Chat asks go over `WS /v1/ws/chat?token=<jwt>`.
 
-Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Upload calls `POST /v1/documents` (multipart `file` + `doc_type`) via `uploadDocument` in `frontend/src/api/documents.ts`. My Documents calls `GET /v1/documents` (full list; client filters by tab and paginates 10 per page) and subscribes to `WS /v1/ws/documents?token=<jwt>`. Any `apiFetch` response with status **500+** shows a red top toast via `showToast` (`useToast`) and still throws `ApiError`. Multipart uploads use a 120s timeout.
+Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Chat threads call `GET /v1/conversations` and `GET /v1/conversations/{id}` via `frontend/src/api/conversations.ts`. Upload calls `POST /v1/documents` (multipart `file` + `doc_type`) via `uploadDocument` in `frontend/src/api/documents.ts`. My Documents calls `GET /v1/documents` (full list; client filters by tab and paginates 10 per page) and subscribes to `WS /v1/ws/documents?token=<jwt>`. Any `apiFetch` response with status **500+** shows a red top toast via `showToast` (`useToast`) and still throws `ApiError`. Multipart uploads use a 120s timeout.
 
 ### Mock / local data the UI already uses
 
 **Upload samples** (`frontend/public/samples/`): `sample-resume.pdf` and `sample-job-description.pdf`, shown in `SampleDocumentModal` from **View sample**. Upload lists themselves start empty.
 
-**Chat document library** (`types/chat.ts` `documentLibrary`): five static `LibraryDoc` rows.
-
-**Chat thread seed** (`ChatView.vue` `messages`): one user + one assistant message with strengths/gaps/sources.
-
-**Recent chats** (`AppSidebar.vue`): five title/time objects; first marked `active`. Clicking them does not change `ChatView` state.
+**Recent chats** (`AppSidebar.vue`): titles and relative times from `GET /v1/conversations`. The active row matches the open `conversation_id`. **New Chat** starts an empty thread.
 
 ### Endpoints the UI would need (not called today)
 
@@ -343,8 +340,9 @@ No global store.
 | Signup/signin fields | Form components | Lost on navigation |
 | Upload file lists | `UploadView` refs | Lost on leave; server rows live on `/documents` |
 | Document WS | `useDocumentRealtime` module socket | Shared while Home or My Documents is mounted |
-| Chat messages, draft, settings, selected doc IDs | `ChatView` refs | Lost on leave |
+| Chat messages, draft, settings, selected doc IDs, conversation id | `ChatView` refs | Lost on leave |
 | Chat right-panel tab | `ChatView.tab` | Local |
+| Chat WS | `useChatRealtime` | Open while Chat is mounted |
 | Toasts | `useToast.ts` module `ref` | Shared; auto-dismiss ~6s |
 
 `useSidebar` hydrates once from:
@@ -352,7 +350,7 @@ No global store.
 - `localStorage['ci.leftSidebarCollapsed']` (`'1'` = collapsed)
 - `localStorage['ci.rightSidebarCollapsed']`
 
-Data flow is parent `ref` → child `v-model` / props. Chat settings (`temperature`, `model`, etc.) are passed into `ChatRightPanel` and `ChatComposer` (`model` only). `send()` reads `temperature` and `selectedJobIds` only to **string-interpolate** a fake reply; it does not call a model.
+Data flow is parent `ref` → child `v-model` / props. Chat settings (`temperature`, `model`, stream, web search, system prompt, top-p, max tokens) are passed into `ChatRightPanel` and `ChatComposer` (`model` only). `send()` forwards them on the chat WebSocket.
 
 ---
 
@@ -381,14 +379,14 @@ JD **View sample** shows `/samples/sample-job-description.pdf` in the same modal
 
 **Continue:** uploads every pending resume/JD via `POST /v1/documents`, then `router.push('/documents')`. Disabled with no files; shows a spinner while posting.
 
-There is **no** shared document store, Pinia, provide/inject, or query params passing upload IDs into `/chat`. My Documents and Home patch rows from the WebSocket.
+There is **no** shared Pinia store. Chat and My Documents each call `GET /v1/documents`. Home and My Documents (and Chat) patch rows from the document WebSocket.
 
 ### Chat page selection (`ChatRightPanel` + `ChatView`)
 
-- Resume: `<select>` bound to `selectedResumeId` (default `'resume-1'` → `John_Doe_Resume.pdf` in `documentLibrary`).
-- Jobs: checkboxes over `documentLibrary` where `kind === 'job'`. Default selected: `'job-1'`, `'job-2'`.
+- Resume: `<select>` of processed resumes from the documents API. First processed resume is preselected when present.
+- Jobs: checkboxes of processed job descriptions. None selected by default.
 - Active context list mirrors selection; X removes a job from `selectedJobIds` (resume has no remove).
-- These IDs exist only in `ChatView` refs. Changing them does **not** update `UploadView`.
+- Asking is blocked until one resume and at least one job are selected.
 
 ---
 
@@ -403,23 +401,26 @@ There is **no** shared document store, Pinia, provide/inject, or query params pa
 
 ### Message structure
 
-See `ChatMessage` in `frontend/src/types/chat.ts` (section 13). Assistant extras (`strengths`, `gaps`, `sources`) are optional and only used in the seeded first reply plus a thin `sources` array on fake follow-ups.
+See `ChatMessage` in `frontend/src/types/chat.ts` (section 13). Assistant extras (`strengths`, `gaps`, `sources`) are optional and filled from `chat.done`.
 
 ### Sending
 
 `send(text = draft.value)`:
 
-1. Trim; ignore empty.
-2. Push user message `{ id: u-${Date.now()}, role: 'user', time: 'Just now', text }`.
-3. Clear draft.
-4. Immediately push assistant message whose `text` mentions `temperature` and the user question; `sources` are placeholders `"Selected resume"` and `"N job descriptions"`.
+1. Trim; ignore empty or in-flight requests.
+2. Require a processed resume and at least one processed job; otherwise toast and open the documents tab.
+3. Push user message and an empty pending assistant bubble.
+4. Send `{ type: "chat.ask", question, resume_id, job_ids, conversation_id, stream, temperature, top_p, max_tokens, system_prompt, web_search, model }` on `WS /v1/ws/chat`.
+5. Append `chat.token.text` while streaming; apply `chat.done` text/citations/strengths/gaps/usage; toast `chat.error`.
 
-No loading spinner, no error state, no abort, no token stream. The `stream` checkbox in settings is **unused** by `send()`. `webSearch` is unused. Composer globe/paperclip unused.
+Composer globe/paperclip unused. Web search and stream toggles in Chat Settings are sent on each ask.
 
 ### Sessions
 
-- Sidebar “Recent Chats” / “New Chat” do not create or switch `messages`.
-- No conversation ID type exists in source.
+- Sidebar Recent Chats load from `GET /v1/conversations`; clicking one loads `GET /v1/conversations/{id}` into `messages`.
+- **New Chat** clears `messages` and `conversation_id`.
+- Home “Recent Conversations” links to `/chat?conversation=<id>`, which ChatView loads.
+- `conversation_id` from `chat.done` is reused on later asks and written into the URL query.
 
 ---
 
@@ -481,28 +482,22 @@ export type ChatRole = 'user' | 'assistant'
 
 export type ChatSource = { id: string; label: string }
 
+export type ChatUsage = { tokens: number; prompt_tokens: number; completion_tokens: number }
+
 export type ChatMessage = {
   id: string
   role: ChatRole
   time: string
   text: string
+  pending?: boolean
   strengths?: string[]
   gaps?: string[]
   sources?: ChatSource[]
-}
-
-export type LibraryDoc = {
-  id: string
-  name: string
-  kind: 'resume' | 'job'
-  sizeLabel: string
-  status: 'processed'  // literal only
+  usage?: ChatUsage
 }
 ```
 
-`documentLibrary` is a `LibraryDoc[]` constant (two resumes, three jobs).
-
-Chat settings in `ChatView` are plain `ref`s, not a named type: `temperature` (0–2), `topP` (0–1), `maxTokens` (256–4096), `model` string, `stream` boolean, `webSearch` boolean, `systemPrompt` string.
+Chat settings in `ChatView` are plain `ref`s: `temperature` (0–2), `topP` (0–1), `maxTokens` (256–4096), `model` string, `stream` boolean, `webSearch` boolean, `systemPrompt` string. They are sent on each WebSocket ask.
 
 ---
 
@@ -548,7 +543,7 @@ These work in the browser without a backend:
 - My Documents: resume/JD tabs, search, 10-per-page pagination from `/v1/documents`
 - Analysis: coming-soon page
 - Upload: drag-and-drop / file picker with type and size filter; add/remove resumes and JDs; paste-text as a `.txt` file; Continue uploads then opens My Documents
-- Chat: seeded thread rendering; local send; suggestion chips; document checkboxes/select; settings sliders (UI only)
+- **Chat:** copy and thumbs on assistant replies; filename sources open in the sample-style file modal; globe toggles web search; extra composer models are disabled
 - Prepare for Interviews: topic list above Settings, practice/mock settings, table/code answers (local send)
 - Marketing illustration image on auth
 - Lucide icons, Inter, Tailwind brand tokens
@@ -568,7 +563,7 @@ These work in the browser without a backend:
 **Navigation**
 
 - Saved Results, Settings, Help: labels only
-- Recent chats / New Chat: display only
+- Recent chats / New Chat: live conversation list and thread switching
 - Notifications: no panel
 - User menu: logout only
 
@@ -579,11 +574,8 @@ These work in the browser without a backend:
 
 **Chat**
 
-- No LLM, no streaming despite `stream` checkbox
-- Upload documents not connected to chat library
-- Copy / thumbs unused
-- Attach / web-search composer buttons unused
-- Fake assistant text only
+- Attach / paperclip unused
+- Thumbs feedback is local only (not sent to the API)
 
 **Repo**
 
@@ -658,13 +650,13 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 
 ### How to continue consistently
 
-1. **Unify documents:** one store (or API) so `UploadView` output is `documentLibrary` / chat `resumeId`/`jobIds`. Authenticated `fetch` already attaches the JWT.
-2. **Replace `send()`** with a real client; keep `ChatMessage` shape or version it explicitly.
-3. **Continue** on upload navigates to `/documents` after files persist (not chat).
-4. Add Home / Analysis / etc. only as real views; don’t turn sidebar `div`s into dead `/home` routes that 404.
-5. If you add env, use `VITE_` prefix and extend `vite-env.d.ts`; never commit secrets.
-6. Update this file when routes, APIs, or document flow change.
+1. Chat document pickers use processed rows from `GET /v1/documents`.
+2. **Continue** on upload navigates to `/documents` after files persist (not chat).
+3. Add Home / Analysis / etc. only as real views; don’t turn sidebar `div`s into dead `/home` routes that 404.
+4. If you add env, use `VITE_` prefix and extend `vite-env.d.ts`; never commit secrets.
+5. Update this file when routes, APIs, or document flow change.
 
 ### Suggested next backend-facing tasks
 
-- Chat `send` → `/v1/chat` (SSE when `stream` is true)
+- Wire interview practice to an API
+- Persist and restore chat conversations in the sidebar

@@ -1,26 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Bell, ChevronDown } from '@lucide/vue'
 import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
-const { user, token, logout } = useAuth()
+const { token, logout, displayName, initials } = useAuth()
 const menuOpen = ref(false)
-
-const displayName = computed(() => user.value?.full_name?.trim() || user.value?.email || 'Account')
-
-const initials = computed(() => {
-  const name = user.value?.full_name?.trim()
-  if (name) {
-    const parts = name.split(/\s+/).filter(Boolean)
-    const letters = (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '')
-    return letters.toUpperCase() || 'CI'
-  }
-  const email = user.value?.email ?? ''
-  return (email[0] ?? 'C').toUpperCase()
-})
 
 async function onLogout() {
   menuOpen.value = false

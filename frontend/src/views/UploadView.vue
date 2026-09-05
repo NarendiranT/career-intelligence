@@ -244,6 +244,7 @@ async function continueUpload() {
     :open="sampleOpen"
     :title="sampleTitle"
     :src="sampleSrc"
+    open-label="Open PDF"
     @close="sampleKind = null"
   />
 </template>

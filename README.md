@@ -70,5 +70,5 @@ See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples.
 
 ## Status
 
-- Frontend: signup/signin JWT session, guarded dashboard, upload → My Documents with live indexing status
-- Backend: email/password JWT, indexing + RAG agents, Postgres/pgvector, FastAPI upload, document WebSocket, chat/SSE
+- Frontend: signup/signin JWT session, guarded dashboard, upload → My Documents with live indexing status, chat RAG over WebSocket with per-reply token usage
+- Backend: email/password JWT, indexing + RAG agents, Postgres/pgvector, FastAPI upload, document WebSocket, chat WebSocket + REST/SSE, LLM token usage on `usage_events` / `GET /v1/usage`

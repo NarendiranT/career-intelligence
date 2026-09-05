@@ -20,11 +20,31 @@ def test_guardrail_rejects_injection():
     assert "guardrail" in out["error"]
 
 
+def test_guardrail_rejects_unprocessed_document(monkeypatch):
+    from agent.rag import nodes
+
+    def fake_invoke(name, **kwargs):
+        return [{"id": str(kwargs["document_ids"][0]), "status": "processing"}]
+
+    monkeypatch.setattr(nodes.tools, "invoke", fake_invoke)
+    doc_id = uuid.uuid4()
+    out = input_guardrail(
+        {
+            "user_id": str(uuid.uuid4()),
+            "question": "What skills are on my resume?",
+            "resume_id": str(doc_id),
+            "job_ids": [],
+        }
+    )
+    assert out["blocked"] is True
+    assert "processing" in out["error"]
+
+
 def test_guardrail_allows_normal_question(monkeypatch):
     from agent.rag import nodes
 
     def fake_invoke(name, **kwargs):
-        return [{"id": str(kwargs["document_ids"][0])}]
+        return [{"id": str(kwargs["document_ids"][0]), "status": "processed"}]
 
     monkeypatch.setattr(nodes.tools, "invoke", fake_invoke)
     doc_id = uuid.uuid4()

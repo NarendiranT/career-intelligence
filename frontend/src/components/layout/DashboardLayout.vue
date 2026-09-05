@@ -4,10 +4,18 @@ import { PanelRightClose, PanelRightOpen } from '@lucide/vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppTopBar from '@/components/layout/AppTopBar.vue'
 import { useSidebar } from '@/composables/useSidebar'
+import type { ConversationSummary } from '@/types/chat'
 
 defineProps<{
   showRecentChats?: boolean
   showInterviewTopics?: boolean
+  recentChats?: ConversationSummary[]
+  activeConversationId?: string | null
+}>()
+
+defineEmits<{
+  selectConversation: [id: string]
+  newChat: []
 }>()
 
 const slots = useSlots()
@@ -21,7 +29,11 @@ const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useSidebar()
       :collapsed="leftCollapsed"
       :show-recent-chats="showRecentChats"
       :show-interview-topics="showInterviewTopics"
+      :recent-chats="recentChats"
+      :active-conversation-id="activeConversationId"
       @toggle="toggleLeft"
+      @select-conversation="$emit('selectConversation', $event)"
+      @new-chat="$emit('newChat')"
     />
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">

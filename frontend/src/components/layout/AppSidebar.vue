@@ -17,18 +17,24 @@ import {
   Upload,
 } from '@lucide/vue'
 import { useInterview } from '@/composables/useInterview'
+import type { ConversationSummary } from '@/types/chat'
+import { formatRelativeTime } from '@/utils/time'
 
 const route = useRoute()
 const { filteredTopics, selectedTopicId, topicQuery, selectTopic } = useInterview()
 
-defineProps<{
+const props = defineProps<{
   showRecentChats?: boolean
   showInterviewTopics?: boolean
   collapsed?: boolean
+  recentChats?: ConversationSummary[]
+  activeConversationId?: string | null
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   toggle: []
+  selectConversation: [id: string]
+  newChat: []
 }>()
 
 const nav = [
@@ -39,14 +45,6 @@ const nav = [
   { label: 'Chat with Assistant', icon: MessageSquare, to: '/chat', badge: null },
   { label: 'Prepare for Interviews', icon: Mic, to: '/interview', badge: null },
 ] as const
-
-const recentChats = [
-  { title: 'Job Fit for Senior AI Engineer', time: '2 minutes ago', active: true },
-  { title: 'Compare two roles', time: '1 hour ago', active: false },
-  { title: 'Skill gap analysis', time: 'Yesterday', active: false },
-  { title: 'Interview preparation', time: '2 days ago', active: false },
-  { title: 'AWS experience details', time: '3 days ago', active: false },
-]
 
 function isActive(to: string | null) {
   return Boolean(to && route.path === to)
@@ -153,22 +151,31 @@ function isActive(to: string | null) {
     <div v-else-if="showRecentChats && !collapsed" class="mt-5 min-h-0 flex-1 overflow-y-auto px-3">
       <div class="mb-2 flex items-center justify-between px-1">
         <p class="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Recent Chats</p>
-        <button class="inline-flex items-center gap-1 text-[11px] font-semibold text-brand" type="button">
+        <button
+          class="inline-flex items-center gap-1 text-[11px] font-semibold text-brand"
+          type="button"
+          @click="emit('newChat')"
+        >
           <Plus class="h-3 w-3" />
           New Chat
         </button>
       </div>
+      <p v-if="!props.recentChats?.length" class="px-2 py-3 text-[12px] text-slate-400">No conversations yet.</p>
       <button
-        v-for="chat in recentChats"
-        :key="chat.title"
+        v-for="chat in props.recentChats"
+        :key="chat.id"
         class="mb-1 w-full rounded-lg px-3 py-2 text-left"
-        :class="chat.active ? 'bg-blue-50' : 'hover:bg-slate-50'"
+        :class="chat.id === props.activeConversationId ? 'bg-blue-50' : 'hover:bg-slate-50'"
         type="button"
+        @click="emit('selectConversation', chat.id)"
       >
-        <p class="truncate text-[13px] font-medium" :class="chat.active ? 'text-brand' : 'text-slate-700'">
+        <p
+          class="truncate text-[13px] font-medium"
+          :class="chat.id === props.activeConversationId ? 'text-brand' : 'text-slate-700'"
+        >
           {{ chat.title }}
         </p>
-        <p class="mt-0.5 text-[11px] text-slate-400">{{ chat.time }}</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">{{ formatRelativeTime(chat.updated_at) }}</p>
       </button>
     </div>
 

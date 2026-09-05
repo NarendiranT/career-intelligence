@@ -8,8 +8,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sqlmodel import select
 
 from agent.indexing.loaders import extract_text
-from agent.llm import get_chat_model, get_embeddings
+from agent.llm import get_chat_model, get_embeddings, invoke_structured_tracked
 from agent.schemas import DocumentClassification, JobProfile, ResumeProfile
+from agent.usage import append_usage, persist_usage_events
 from backend.db import session_scope
 from backend.models import Document, DocumentStatus
 from mcp.registry import tools
@@ -28,6 +29,7 @@ class IndexingState(TypedDict, total=False):
     profile: dict[str, Any]
     chunks: list[dict[str, Any]]
     error: str
+    usage_events: list[dict[str, Any]]
 
 
 def _ids(state: IndexingState) -> tuple[uuid.UUID, uuid.UUID]:
@@ -78,9 +80,10 @@ def route_document(state: IndexingState) -> dict[str, Any]:
         return {"doc_type": hinted}
 
     llm = get_chat_model(role="router")
-    structured = llm.with_structured_output(DocumentClassification)
     snippet = (state.get("raw_text") or "")[:4000]
-    result: DocumentClassification = structured.invoke(
+    result, usage = invoke_structured_tracked(
+        llm,
+        DocumentClassification,
         [
             (
                 "system",
@@ -91,7 +94,8 @@ def route_document(state: IndexingState) -> dict[str, Any]:
                 "human",
                 f"Filename: {state.get('filename')}\n\nDocument:\n{snippet}",
             ),
-        ]
+        ],
+        event_type="indexing.route",
     )
     tools.invoke(
         "update_processing_status",
@@ -100,7 +104,7 @@ def route_document(state: IndexingState) -> dict[str, Any]:
         status=DocumentStatus.processing,
         doc_type=result.doc_type,
     )
-    return {"doc_type": result.doc_type}
+    return {"doc_type": result.doc_type, "usage_events": append_usage(state, usage)}
 
 
 def process_resume(state: IndexingState) -> dict[str, Any]:
@@ -108,8 +112,9 @@ def process_resume(state: IndexingState) -> dict[str, Any]:
         return {}
     user_id, document_id = _ids(state)
     llm = get_chat_model(role="extraction")
-    structured = llm.with_structured_output(ResumeProfile)
-    profile: ResumeProfile = structured.invoke(
+    profile, usage = invoke_structured_tracked(
+        llm,
+        ResumeProfile,
         [
             (
                 "system",
@@ -117,7 +122,8 @@ def process_resume(state: IndexingState) -> dict[str, Any]:
                 "Leave fields empty rather than inventing them.",
             ),
             ("human", state.get("raw_text") or ""),
-        ]
+        ],
+        event_type="indexing.extract_resume",
     )
     tools.invoke(
         "save_resume_profile",
@@ -125,7 +131,7 @@ def process_resume(state: IndexingState) -> dict[str, Any]:
         document_id=document_id,
         profile=profile,
     )
-    return {"profile": profile.model_dump()}
+    return {"profile": profile.model_dump(), "usage_events": append_usage(state, usage)}
 
 
 def process_job(state: IndexingState) -> dict[str, Any]:
@@ -133,15 +139,17 @@ def process_job(state: IndexingState) -> dict[str, Any]:
         return {}
     user_id, document_id = _ids(state)
     llm = get_chat_model(role="extraction")
-    structured = llm.with_structured_output(JobProfile)
-    profile: JobProfile = structured.invoke(
+    profile, usage = invoke_structured_tracked(
+        llm,
+        JobProfile,
         [
             (
                 "system",
                 "Extract a structured job description profile. Use only facts present in the document.",
             ),
             ("human", state.get("raw_text") or ""),
-        ]
+        ],
+        event_type="indexing.extract_job",
     )
     tools.invoke(
         "save_job_profile",
@@ -150,7 +158,7 @@ def process_job(state: IndexingState) -> dict[str, Any]:
         profile=profile,
     )
     tools.invoke("enrich_job_board", user_id=user_id, document_id=document_id)
-    return {"profile": profile.model_dump()}
+    return {"profile": profile.model_dump(), "usage_events": append_usage(state, usage)}
 
 
 def chunk_and_embed(state: IndexingState) -> dict[str, Any]:
@@ -189,19 +197,24 @@ def persist_data(state: IndexingState) -> dict[str, Any]:
             status=DocumentStatus.failed,
             error_message=state["error"],
         )
-        return {}
-    tools.invoke(
-        "replace_document_chunks",
+    else:
+        tools.invoke(
+            "replace_document_chunks",
+            user_id=user_id,
+            document_id=document_id,
+            chunks=state.get("chunks") or [],
+        )
+        tools.invoke(
+            "update_processing_status",
+            user_id=user_id,
+            document_id=document_id,
+            status=DocumentStatus.processed,
+            error_message=None,
+            doc_type=state.get("doc_type"),
+        )
+    persist_usage_events(
         user_id=user_id,
-        document_id=document_id,
-        chunks=state.get("chunks") or [],
-    )
-    tools.invoke(
-        "update_processing_status",
-        user_id=user_id,
-        document_id=document_id,
-        status=DocumentStatus.processed,
-        error_message=None,
-        doc_type=state.get("doc_type"),
+        events=state.get("usage_events") or [],
+        extra={"document_id": str(document_id)},
     )
     return {}

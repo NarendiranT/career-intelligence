@@ -1,6 +1,6 @@
 # Career Intelligence agents
 
-The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to `POST /v1/documents`, then My Documents loads `GET /v1/documents` and listens on `WS /v1/ws/documents` for indexing status. Chat UI is not wired yet.
+The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to `POST /v1/documents`, then My Documents loads `GET /v1/documents` and listens on `WS /v1/ws/documents` for indexing status. Chat loads those documents, lists threads on `GET /v1/conversations`, and streams RAG answers on `WS /v1/ws/chat`.
 
 ## Stack
 
@@ -10,7 +10,7 @@ The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to 
 - Hugging Face embeddings (`sentence-transformers/all-MiniLM-L6-v2`, 384-d) via `HuggingFaceEmbeddings`
 - MCP-style tools in `mcp/` (in-process callables)
 
-Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
+Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Structured LLM calls use Groq JSON schema mode (`strict=True`), not tool calling, because gpt-oss models often fail with `tool_use_failed`. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
 
 ## Setup
 
@@ -60,16 +60,26 @@ Each upload inserts a `documents` row, then runs `indexing_graph` in a FastAPI b
 4. Build prompt
 5. Generate answer
 6. Faithfulness check (retry retrieval up to 2 times)
-7. Persist conversation + usage
+7. Persist conversation + usage (one `usage_events` row per LLM call)
+
+Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner totals: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent threads) and `GET /v1/conversations/<id>` (messages).
 
 ```bash
 curl -s -X POST http://localhost:8000/v1/chat \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"question":"What skills are on my resume?","resume_id":"<uuid>","stream":false}'
+  -d '{"question":"What skills are on my resume?","resume_id":"<uuid>","job_ids":["<uuid>"],"stream":false,"temperature":0.7}'
 ```
 
-SSE: `"stream": true` yields `token` then `done` events.
+SSE: `"stream": true` on `POST /v1/chat` yields `token` then `done` events.
+
+WebSocket chat (`WS /v1/ws/chat?token=<jwt>`): send `{ "type": "chat.ask", "question": "...", "resume_id": "<uuid>", "job_ids": ["<uuid>"], "stream": true, "temperature": 0.7, "top_p": 1, "max_tokens": 1024, "system_prompt": "...", "web_search": false, "model": "deep-research" }`. Server replies `chat.status`, then `chat.token` chunks when `stream` is true, then `chat.done` (text, citations, strengths, gaps, conversation_id, usage). Errors are `{ "type": "chat.error", "detail": "..." }`. Generation uses Chat Settings: temperature, top-p, max tokens, and system instructions (plus the grounded-answer constraint).
+
+Token tracking: each Groq structured call records prompt/completion tokens, model, and latency on `usage_events` (`indexing.route`, `indexing.extract_resume`, `indexing.extract_job`, `rag.query_understanding`, `rag.generate`, `rag.faithfulness`). Indexing rows store `document_id` in `extra`.
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/usage
+```
 
 Auth:
 

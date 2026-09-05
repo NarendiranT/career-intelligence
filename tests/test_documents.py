@@ -166,6 +166,32 @@ def test_document_websocket_rejects_missing_token():
 
 
 @requires_postgres
+def test_download_document_file(monkeypatch, tmp_path: Path, sample_resume: Path):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr("backend.routers.documents._run_indexing", lambda *_args, **_kwargs: None)
+    token = _register()["access_token"]
+    other = _register()["access_token"]
+    uploaded = client.post(
+        "/v1/documents",
+        headers=auth_headers(token),
+        files={"file": ("Ada_Resume.txt", sample_resume.read_bytes(), "text/plain")},
+        data={"doc_type": "resume"},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    doc_id = uploaded.json()["id"]
+
+    response = client.get(f"/v1/documents/{doc_id}/file", headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.content == sample_resume.read_bytes()
+    assert "Ada_Resume.txt" in (response.headers.get("content-disposition") or "")
+
+    forbidden = client.get(f"/v1/documents/{doc_id}/file", headers=auth_headers(other))
+    assert forbidden.status_code == 404
+    assert client.get(f"/v1/documents/{doc_id}/file").status_code == 401
+    assert client.get(f"/v1/documents/{uuid.uuid4()}/file", headers=auth_headers(token)).status_code == 404
+
+
+@requires_postgres
 def test_delete_document_removes_file_and_row(monkeypatch, tmp_path: Path, sample_resume: Path):
     monkeypatch.setattr(settings, "data_dir", tmp_path)
     monkeypatch.setattr("backend.routers.documents._run_indexing", lambda *_args, **_kwargs: None)

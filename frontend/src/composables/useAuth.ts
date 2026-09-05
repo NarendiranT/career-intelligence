@@ -52,6 +52,17 @@ export function bootstrapAuth(): Promise<void> {
 
 export function useAuth() {
   const isAuthenticated = computed(() => Boolean(token.value && user.value))
+  const displayName = computed(() => user.value?.full_name?.trim() || user.value?.email || 'Account')
+  const initials = computed(() => {
+    const name = user.value?.full_name?.trim()
+    if (name) {
+      const parts = name.split(/\s+/).filter(Boolean)
+      const letters = (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '')
+      return letters.toUpperCase() || 'CI'
+    }
+    const email = user.value?.email ?? ''
+    return (email[0] ?? 'C').toUpperCase()
+  })
 
   async function register(fullName: string, email: string, password: string): Promise<void> {
     const result = await registerAccount({
@@ -85,6 +96,8 @@ export function useAuth() {
     user,
     bootstrapped,
     isAuthenticated,
+    displayName,
+    initials,
     register,
     login,
     logout,

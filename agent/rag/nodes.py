@@ -7,8 +7,9 @@ from typing import Any, TypedDict
 
 from sqlmodel import select
 
-from agent.llm import get_chat_model, get_embeddings
+from agent.llm import get_chat_model, get_embeddings, invoke_structured_tracked
 from agent.schemas import FaithfulnessResult, GeneratedAnswer, QueryPlan, RetrievedChunk
+from agent.usage import append_usage, persist_usage_events, summarize_usage
 from backend.config import settings
 from backend.db import session_scope
 from backend.models import Chunk, Document
@@ -49,6 +50,14 @@ class RagState(TypedDict, total=False):
     error: str
     blocked: bool
     answer: dict[str, Any]
+    temperature: float
+    top_p: float
+    max_tokens: int
+    system_prompt: str
+    web_search: bool
+    model: str
+    usage_events: list[dict[str, Any]]
+    usage: dict[str, int]
 
 
 def _user(state: RagState) -> uuid.UUID:
@@ -82,13 +91,21 @@ def input_guardrail(state: RagState) -> dict[str, Any]:
         missing = [str(i) for i in selected if str(i) not in owned_ids]
         if missing:
             return {"blocked": True, "error": f"unknown document ids: {', '.join(missing)}", "ok": False}
+        not_ready = [item["id"] for item in owned if item.get("status") != "processed"]
+        if not_ready:
+            return {
+                "blocked": True,
+                "error": "selected documents are still processing; wait until they are processed",
+                "ok": False,
+            }
     return {"blocked": False, "error": "", "retries": 0, "k": 8, "broaden": False}
 
 
 def query_understanding(state: RagState) -> dict[str, Any]:
     llm = get_chat_model(role="router")
-    structured = llm.with_structured_output(QueryPlan)
-    plan: QueryPlan = structured.invoke(
+    plan, usage = invoke_structured_tracked(
+        llm,
+        QueryPlan,
         [
             (
                 "system",
@@ -96,9 +113,14 @@ def query_understanding(state: RagState) -> dict[str, Any]:
                 "Rewrite the query for vector retrieval. Do not invent document IDs.",
             ),
             ("human", state["question"]),
-        ]
+        ],
+        event_type="rag.query_understanding",
     )
-    return {"intent": plan.intent, "rewritten_query": plan.rewritten_query}
+    return {
+        "intent": plan.intent,
+        "rewritten_query": plan.rewritten_query,
+        "usage_events": append_usage(state, usage),
+    }
 
 
 def retrieve_context(state: RagState) -> dict[str, Any]:
@@ -145,14 +167,26 @@ def build_prompt(state: RagState) -> dict[str, Any]:
 
 
 def generate_answer(state: RagState) -> dict[str, Any]:
-    llm = get_chat_model(role="generation", temperature=0.2)
-    structured = llm.with_structured_output(GeneratedAnswer)
+    temperature = float(state.get("temperature") if state.get("temperature") is not None else 0.2)
+    max_tokens = int(state["max_tokens"]) if state.get("max_tokens") else None
+    top_p = float(state["top_p"]) if state.get("top_p") is not None else None
+    llm = get_chat_model(
+        role="generation",
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+    )
     chunk_block = "\n\n".join(
         f"[{item['filename']}]\n{item['content']}" for item in (state.get("chunks") or [])
     )
-    answer: GeneratedAnswer = structured.invoke(
+    system = (state.get("system_prompt") or "").strip() or SYSTEM_PROMPT
+    if system != SYSTEM_PROMPT:
+        system = f"{system}\n\n{SYSTEM_PROMPT}"
+    answer, usage = invoke_structured_tracked(
+        llm,
+        GeneratedAnswer,
         [
-            ("system", SYSTEM_PROMPT),
+            ("system", system),
             (
                 "human",
                 (
@@ -162,7 +196,8 @@ def generate_answer(state: RagState) -> dict[str, Any]:
                     f"Retrieved chunks:\n{chunk_block or '(none)'}"
                 ),
             ),
-        ]
+        ],
+        event_type="rag.generate",
     )
     if not answer.citations:
         from agent.schemas import Citation
@@ -171,13 +206,14 @@ def generate_answer(state: RagState) -> dict[str, Any]:
         for item in state.get("chunks") or []:
             seen[item["document_id"]] = item["filename"]
         answer.citations = [Citation(id=did, label=name) for did, name in seen.items()]
-    return {"draft": answer.model_dump()}
+    return {"draft": answer.model_dump(), "usage_events": append_usage(state, usage)}
 
 
 def validate_answer(state: RagState) -> dict[str, Any]:
     llm = get_chat_model(role="router")
-    structured = llm.with_structured_output(FaithfulnessResult)
-    result: FaithfulnessResult = structured.invoke(
+    result, usage = invoke_structured_tracked(
+        llm,
+        FaithfulnessResult,
         [
             (
                 "system",
@@ -188,14 +224,16 @@ def validate_answer(state: RagState) -> dict[str, Any]:
                 "human",
                 f"Draft: {state.get('draft')}\n\nContext chunks: {state.get('chunks')}\nProfiles: {state.get('profiles')}",
             ),
-        ]
+        ],
+        event_type="rag.faithfulness",
     )
     retries = int(state.get("retries") or 0)
+    usage_events = append_usage(state, usage)
     if result.grounded or not (state.get("chunks") or state.get("profiles")):
-        return {"ok": True, "answer": state.get("draft")}
+        return {"ok": True, "answer": state.get("draft"), "usage_events": usage_events}
     if retries >= 2:
-        return {"ok": True, "answer": state.get("draft")}
-    return {"ok": False}
+        return {"ok": True, "answer": state.get("draft"), "usage_events": usage_events}
+    return {"ok": False, "usage_events": usage_events}
 
 
 def retry_retrieval(state: RagState) -> dict[str, Any]:
@@ -206,7 +244,10 @@ def retry_retrieval(state: RagState) -> dict[str, Any]:
 
 def stream_and_persist(state: RagState) -> dict[str, Any]:
     if state.get("blocked"):
-        return {"answer": {"text": state.get("error") or "blocked", "citations": [], "strengths": [], "gaps": []}}
+        return {
+            "answer": {"text": state.get("error") or "blocked", "citations": [], "strengths": [], "gaps": []},
+            "usage": summarize_usage(state.get("usage_events")),
+        }
     user_id = _user(state)
     conversation_id = uuid.UUID(state["conversation_id"]) if state.get("conversation_id") else None
     answer = state.get("answer") or state.get("draft") or {"text": "", "citations": [], "strengths": [], "gaps": []}
@@ -216,8 +257,13 @@ def stream_and_persist(state: RagState) -> dict[str, Any]:
         conversation_id=conversation_id,
         role="user",
         content=state["question"],
+        extra={
+            "resume_id": state.get("resume_id"),
+            "job_ids": list(state.get("job_ids") or []),
+        },
     )
     convo_id = uuid.UUID(saved_user["conversation_id"])
+    usage = summarize_usage(state.get("usage_events"))
     tools.invoke(
         "save_conversation_message",
         user_id=user_id,
@@ -225,14 +271,17 @@ def stream_and_persist(state: RagState) -> dict[str, Any]:
         role="assistant",
         content=answer.get("text") or "",
         citations=answer.get("citations"),
-        extra={"strengths": answer.get("strengths"), "gaps": answer.get("gaps")},
+        extra={"strengths": answer.get("strengths"), "gaps": answer.get("gaps"), "usage": usage},
     )
-    tools.invoke(
-        "update_usage",
+    persist_usage_events(
         user_id=user_id,
         conversation_id=convo_id,
-        event_type="chat",
-        model=settings.generation_model,
+        events=state.get("usage_events") or [],
+        extra={"web_search": bool(state.get("web_search")), "ui_model": state.get("model")},
     )
-    tools.invoke("web_search", query=state["question"], enabled=False)
-    return {"conversation_id": str(convo_id), "answer": answer}
+    tools.invoke("web_search", query=state["question"], enabled=bool(state.get("web_search")))
+    return {
+        "conversation_id": str(convo_id),
+        "answer": answer,
+        "usage": usage,
+    }

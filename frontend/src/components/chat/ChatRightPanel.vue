@@ -1,26 +1,35 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Briefcase, ChevronRight, CircleAlert, FileText, Plus, Sparkles, X } from '@lucide/vue'
-import { documentLibrary } from '@/types/chat'
+import type { ApiDocument } from '@/types/document'
+import { formatBytes } from '@/types/upload'
 
 const tab = defineModel<'documents' | 'settings'>('tab', { default: 'documents' })
-const selectedResumeId = defineModel<string>('resumeId', { default: 'resume-1' })
-const selectedJobIds = defineModel<string[]>('jobIds', { default: () => ['job-1', 'job-2'] })
+const selectedResumeId = defineModel<string>('resumeId', { default: '' })
+const selectedJobIds = defineModel<string[]>('jobIds', { default: () => [] })
 const temperature = defineModel<number>('temperature', { default: 0.7 })
 const topP = defineModel<number>('topP', { default: 1 })
 const maxTokens = defineModel<number>('maxTokens', { default: 1024 })
 const model = defineModel<string>('model', { default: 'deep-research' })
 const stream = defineModel<boolean>('stream', { default: true })
-const webSearch = defineModel<boolean>('webSearch', { default: false })
 const systemPrompt = defineModel<string>('systemPrompt', {
   default: 'You are Career Intelligence, a helpful career coach. Use the selected resume and job descriptions to give specific, actionable advice.',
 })
 
-const resumes = documentLibrary.filter((doc) => doc.kind === 'resume')
-const jobs = documentLibrary.filter((doc) => doc.kind === 'job')
+const props = defineProps<{
+  documents: ApiDocument[]
+  loading?: boolean
+}>()
 
-const selectedResume = computed(() => resumes.find((doc) => doc.id === selectedResumeId.value))
-const selectedJobs = computed(() => jobs.filter((doc) => selectedJobIds.value.includes(doc.id)))
+const resumes = computed(() =>
+  props.documents.filter((doc) => doc.doc_type !== 'job' && doc.status === 'processed'),
+)
+const jobs = computed(() =>
+  props.documents.filter((doc) => doc.doc_type === 'job' && doc.status === 'processed'),
+)
+
+const selectedResume = computed(() => resumes.value.find((doc) => doc.id === selectedResumeId.value))
+const selectedJobs = computed(() => jobs.value.filter((doc) => selectedJobIds.value.includes(doc.id)))
 
 const examples = [
   'How well do I match this role?',
@@ -32,6 +41,10 @@ const examples = [
 defineEmits<{
   ask: [question: string]
 }>()
+
+function sizeLabel(doc: ApiDocument): string {
+  return doc.size == null ? '—' : formatBytes(doc.size)
+}
 
 function toggleJob(id: string) {
   const current = selectedJobIds.value
@@ -75,6 +88,7 @@ function removeJob(id: string) {
     </div>
 
     <div v-if="tab === 'documents'" class="mt-4 space-y-4">
+      <p v-if="loading" class="text-xs text-slate-400">Loading documents…</p>
       <section>
         <label class="flex items-center gap-2 text-xs font-semibold text-slate-700">
           <FileText class="h-3.5 w-3.5 text-brand" />
@@ -84,9 +98,13 @@ function removeJob(id: string) {
           v-model="selectedResumeId"
           class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand"
         >
-          <option v-for="resume in resumes" :key="resume.id" :value="resume.id">{{ resume.name }}</option>
+          <option value="">Select a processed resume</option>
+          <option v-for="resume in resumes" :key="resume.id" :value="resume.id">{{ resume.filename }}</option>
         </select>
-        <p v-if="selectedResume" class="mt-1.5 text-[11px] text-emerald-600">Processed • {{ selectedResume.sizeLabel }}</p>
+        <p v-if="selectedResume" class="mt-1.5 text-[11px] text-emerald-600">Processed • {{ sizeLabel(selectedResume) }}</p>
+        <p v-else-if="!loading && !resumes.length" class="mt-1.5 text-[11px] text-slate-400">
+          Upload a resume and wait until it is processed.
+        </p>
       </section>
 
       <section>
@@ -94,7 +112,10 @@ function removeJob(id: string) {
           <Briefcase class="h-3.5 w-3.5 text-brand" />
           Select Job Description(s)
         </label>
-        <div class="mt-2 space-y-1.5">
+        <div v-if="!loading && !jobs.length" class="mt-2 text-[11px] text-slate-400">
+          Upload a job description and wait until it is processed.
+        </div>
+        <div v-else class="mt-2 space-y-1.5">
           <label
             v-for="job in jobs"
             :key="job.id"
@@ -107,8 +128,8 @@ function removeJob(id: string) {
               @change="toggleJob(job.id)"
             />
             <span>
-              {{ job.name }}
-              <span class="block text-[11px] text-slate-400">{{ job.sizeLabel }}</span>
+              {{ job.filename }}
+              <span class="block text-[11px] text-slate-400">{{ sizeLabel(job) }}</span>
             </span>
           </label>
         </div>
@@ -126,8 +147,8 @@ function removeJob(id: string) {
           >
             <div>
               <p class="text-[11px] font-medium text-slate-400">Resume</p>
-              <p class="text-[13px] font-medium text-slate-800">{{ selectedResume.name }}</p>
-              <p class="text-[11px] text-emerald-600">Processed • {{ selectedResume.sizeLabel }}</p>
+              <p class="text-[13px] font-medium text-slate-800">{{ selectedResume.filename }}</p>
+              <p class="text-[11px] text-emerald-600">Processed • {{ sizeLabel(selectedResume) }}</p>
             </div>
           </li>
           <li
@@ -137,10 +158,10 @@ function removeJob(id: string) {
           >
             <div>
               <p class="text-[11px] font-medium text-slate-400">Job Description</p>
-              <p class="text-[13px] font-medium text-slate-800">{{ job.name }}</p>
-              <p class="text-[11px] text-emerald-600">Processed • {{ job.sizeLabel }}</p>
+              <p class="text-[13px] font-medium text-slate-800">{{ job.filename }}</p>
+              <p class="text-[11px] text-emerald-600">Processed • {{ sizeLabel(job) }}</p>
             </div>
-            <button class="text-slate-400 hover:text-slate-600" type="button" :aria-label="`Remove ${job.name}`" @click="removeJob(job.id)">
+            <button class="text-slate-400 hover:text-slate-600" type="button" :aria-label="`Remove ${job.filename}`" @click="removeJob(job.id)">
               <X class="h-4 w-4" />
             </button>
           </li>
@@ -157,9 +178,9 @@ function removeJob(id: string) {
           class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none"
         >
           <option value="deep-research">Deep Research</option>
-          <option value="gpt-4o">GPT-4o</option>
-          <option value="claude-3.5">Claude 3.5 Sonnet</option>
-          <option value="gemini-pro">Gemini Pro</option>
+          <option value="gpt-4o" disabled>GPT-4o</option>
+          <option value="claude-3.5" disabled>Claude 3.5 Sonnet</option>
+          <option value="gemini-pro" disabled>Gemini Pro</option>
         </select>
       </label>
 
@@ -188,11 +209,6 @@ function removeJob(id: string) {
       <label class="flex items-center justify-between text-xs font-semibold text-slate-700">
         Stream responses
         <input v-model="stream" class="h-4 w-4 rounded border-slate-300 text-brand" type="checkbox" />
-      </label>
-
-      <label class="flex items-center justify-between text-xs font-semibold text-slate-700">
-        Web search
-        <input v-model="webSearch" class="h-4 w-4 rounded border-slate-300 text-brand" type="checkbox" />
       </label>
 
       <label class="block text-xs font-semibold text-slate-700">

@@ -1,13 +1,19 @@
 import os
-from typing import Literal
+from typing import Any, Literal
+import logging
 
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
+from pydantic import BaseModel
 
+from agent.usage import extract_token_usage, model_name, timed_invoke, unwrap_structured
 from backend.config import settings
 from backend.errors import MissingLLMConfigError
 
+logger = logging.getLogger(__name__)
+
 ChatRole = Literal["extraction", "router", "generation"]
+StructuredMethod = Literal["json_schema", "json_mode"]
 
 
 def require_groq() -> None:
@@ -17,14 +23,111 @@ def require_groq() -> None:
     os.environ["GROQ_API_KEY"] = key
 
 
-def get_chat_model(*, role: ChatRole = "generation", temperature: float = 0) -> ChatGroq:
+def get_chat_model(
+    *,
+    role: ChatRole = "generation",
+    temperature: float = 0,
+    max_tokens: int | None = None,
+    top_p: float | None = None,
+) -> ChatGroq:
     require_groq()
     models = {
         "extraction": settings.extraction_model,
         "router": settings.router_model,
         "generation": settings.generation_model,
     }
-    return ChatGroq(model=models[role], temperature=temperature)
+    kwargs: dict[str, Any] = {"model": models[role], "temperature": temperature}
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+    if top_p is not None:
+        kwargs["model_kwargs"] = {"top_p": top_p}
+    return ChatGroq(**kwargs)
+
+
+def _with_json_schema_hint(messages: list[Any], schema: type[BaseModel]) -> list[Any]:
+    hint = (
+        "Return only a JSON object that matches this schema. "
+        "Do not wrap it in markdown. Do not call tools.\n"
+        f"{schema.model_json_schema()}"
+    )
+    if not messages:
+        return [("system", hint)]
+    first = messages[0]
+    if isinstance(first, tuple) and first and first[0] == "system":
+        return [(first[0], f"{first[1]}\n\n{hint}"), *messages[1:]]
+    return [("system", hint), *messages]
+
+
+def _structured_runnable(llm: Any, schema: type[BaseModel], **kwargs: Any) -> Any:
+    try:
+        return llm.with_structured_output(schema, include_raw=True, **kwargs)
+    except TypeError:
+        return llm.with_structured_output(schema, **kwargs)
+
+
+def invoke_structured_tracked(
+    llm: Any,
+    schema: type[BaseModel],
+    messages: list[Any],
+    *,
+    event_type: str,
+) -> tuple[Any, dict[str, Any]]:
+    """Like ``invoke_structured``, plus token counts and latency for usage tracking."""
+    last_error: BaseException | None = None
+    attempts: list[tuple[StructuredMethod, dict[str, Any]]] = [
+        ("json_schema", {"strict": True}),
+        ("json_mode", {}),
+    ]
+    for method, extra in attempts:
+        try:
+            runnable = _structured_runnable(llm, schema, method=method, **extra)
+            payload = messages if method == "json_schema" else _with_json_schema_hint(messages, schema)
+            result, latency_ms = timed_invoke(runnable, payload)
+            parsed, raw = unwrap_structured(result, schema)
+            tokens = extract_token_usage(raw if raw is not None else result)
+            usage = {
+                "event_type": event_type,
+                "model": model_name(llm),
+                "input_tokens": tokens["input_tokens"],
+                "output_tokens": tokens["output_tokens"],
+                "tokens": tokens["total_tokens"],
+                "latency_ms": latency_ms,
+            }
+            return parsed, usage
+        except TypeError as exc:
+            if "method" not in str(exc) and "unexpected keyword" not in str(exc).lower():
+                raise
+            result, latency_ms = timed_invoke(llm.with_structured_output(schema), messages)
+            parsed, raw = unwrap_structured(result, schema)
+            tokens = extract_token_usage(raw if raw is not None else result)
+            return parsed, {
+                "event_type": event_type,
+                "model": model_name(llm),
+                "input_tokens": tokens["input_tokens"],
+                "output_tokens": tokens["output_tokens"],
+                "tokens": tokens["total_tokens"],
+                "latency_ms": latency_ms,
+            }
+        except MissingLLMConfigError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if method == "json_mode":
+                raise
+            logger.warning("structured output %s failed; retrying with json_mode: %s", method, exc)
+    if last_error:
+        raise last_error
+    raise RuntimeError("structured output failed")
+
+
+def invoke_structured(llm: Any, schema: type[BaseModel], messages: list[Any]) -> Any:
+    """Parse a Pydantic schema without Groq tool-calling.
+
+    gpt-oss models often return invalid tool-call JSON (``tool_use_failed``).
+    Prefer constrained JSON schema, then JSON object mode.
+    """
+    parsed, _usage = invoke_structured_tracked(llm, schema, messages, event_type="llm")
+    return parsed
 
 
 def get_embeddings() -> HuggingFaceEmbeddings:

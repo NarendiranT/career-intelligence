@@ -6,9 +6,10 @@ from pathlib import Path
 from agent.indexing.graph import indexing_graph
 from agent.schemas import ResumeProfile
 from backend.config import settings
-from backend.models import Document, DocumentStatus, DocType
+from backend.models import Document, DocumentStatus, DocType, UsageEvent
 from backend.db import session_scope
 from mcp.registry import tools
+from sqlmodel import select
 from tests.conftest import requires_postgres
 
 
@@ -24,7 +25,7 @@ class _FakeChat:
     def __init__(self, payload):
         self.payload = payload
 
-    def with_structured_output(self, _schema):
+    def with_structured_output(self, _schema, **_kwargs):
         return _Structured(self.payload)
 
 
@@ -68,3 +69,10 @@ def test_indexing_graph_txt_resume(monkeypatch, sample_resume: Path, db_user, tm
     assert not result.get("error")
     meta = tools.invoke("fetch_document_metadata", user_id=db_user, document_ids=[document_id])
     assert meta[0]["status"] == "processed"
+
+    with session_scope() as db:
+        events = db.exec(select(UsageEvent).where(UsageEvent.user_id == db_user)).all()
+        types = [event.event_type for event in events]
+        document_ids = [event.extra.get("document_id") if event.extra else None for event in events]
+    assert types == ["indexing.extract_resume"]
+    assert document_ids == [str(document_id)]

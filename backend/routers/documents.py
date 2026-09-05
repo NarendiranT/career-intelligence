@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from agent.indexing.graph import indexing_graph
@@ -111,6 +112,28 @@ def _unlink_storage(storage_path: str) -> None:
         path.unlink(missing_ok=True)
     except OSError:
         logger.warning("Could not remove stored file %s", path, exc_info=True)
+
+
+@router.get("/{document_id}/file")
+def get_document_file(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_user_id),
+) -> FileResponse:
+    doc = db.exec(
+        select(Document).where(Document.id == document_id, Document.user_id == user_id)
+    ).first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    path = Path(doc.storage_path)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="file not found")
+    return FileResponse(
+        path,
+        media_type=doc.mime or "application/octet-stream",
+        filename=doc.filename,
+        content_disposition_type="inline",
+    )
 
 
 @router.delete("/{document_id}", status_code=204)

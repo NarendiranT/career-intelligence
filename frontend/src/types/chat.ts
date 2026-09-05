@@ -5,28 +5,77 @@ export type ChatSource = {
   label: string
 }
 
+export type ChatUsage = {
+  tokens: number
+  prompt_tokens: number
+  completion_tokens: number
+}
+
+export type ChatFeedback = 'up' | 'down'
+
 export type ChatMessage = {
   id: string
   role: ChatRole
   time: string
   text: string
+  pending?: boolean
   strengths?: string[]
   gaps?: string[]
   sources?: ChatSource[]
+  usage?: ChatUsage
 }
 
-export type LibraryDoc = {
+export type ChatAskPayload = {
+  question: string
+  resume_id: string | null
+  job_ids: string[]
+  conversation_id: string | null
+  stream: boolean
+  temperature: number
+  top_p: number
+  max_tokens: number
+  system_prompt: string
+  web_search: boolean
+  model: string
+}
+
+export type ChatDoneEvent = {
+  type: 'chat.done'
+  conversation_id: string | null
+  text: string
+  citations: ChatSource[]
+  strengths: string[]
+  gaps: string[]
+  usage?: ChatUsage
+}
+
+export type ChatSocketEvent =
+  | { type: 'chat.status'; status: string }
+  | { type: 'chat.token'; text: string }
+  | { type: 'chat.error'; detail: string }
+  | ChatDoneEvent
+
+export type ConversationSummary = {
   id: string
-  name: string
-  kind: 'resume' | 'job'
-  sizeLabel: string
-  status: 'processed'
+  title: string
+  updated_at: string | null
 }
 
-export const documentLibrary: LibraryDoc[] = [
-  { id: 'resume-1', name: 'John_Doe_Resume.pdf', kind: 'resume', sizeLabel: '245 KB', status: 'processed' },
-  { id: 'resume-2', name: 'software-engineer-resume.pdf', kind: 'resume', sizeLabel: '198 KB', status: 'processed' },
-  { id: 'job-1', name: 'Senior AI Engineer - Acme Corp.pdf', kind: 'job', sizeLabel: '312 KB', status: 'processed' },
-  { id: 'job-2', name: 'ML Engineer - TechCo.pdf', kind: 'job', sizeLabel: '428 KB', status: 'processed' },
-  { id: 'job-3', name: 'GenAI Platform Engineer - InnovateAI.pdf', kind: 'job', sizeLabel: '276 KB', status: 'processed' },
-]
+export type ConversationMessage = {
+  id: string
+  role: ChatRole
+  content: string
+  citations: ChatSource[]
+  extra: {
+    strengths?: string[]
+    gaps?: string[]
+    usage?: ChatUsage
+  } | null
+  created_at: string | null
+}
+
+export type ConversationDetail = ConversationSummary & {
+  resume_id?: string | null
+  job_ids?: string[]
+  messages: ConversationMessage[]
+}

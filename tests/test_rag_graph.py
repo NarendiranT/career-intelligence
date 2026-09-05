@@ -7,7 +7,8 @@ from agent.indexing.graph import indexing_graph
 from agent.rag.graph import rag_graph
 from agent.schemas import FaithfulnessResult, GeneratedAnswer, QueryPlan, ResumeProfile
 from backend.db import session_scope
-from backend.models import Document, DocumentStatus, DocType
+from backend.models import Document, DocumentStatus, DocType, UsageEvent
+from sqlmodel import select
 from tests.conftest import requires_postgres
 from tests.test_indexing_graph import _FakeChat, _FakeEmbeddings
 
@@ -44,7 +45,7 @@ def test_rag_graph_grounded_answer(monkeypatch, sample_resume: Path, db_user, tm
 
     def chat_for_schema(**kwargs):
         class Router:
-            def with_structured_output(self, schema):
+            def with_structured_output(self, schema, **_kwargs):
                 if schema is QueryPlan:
                     return _FakeChat(
                         QueryPlan(intent="resume", rewritten_query="Jane Candidate skills Python")
@@ -80,3 +81,12 @@ def test_rag_graph_grounded_answer(monkeypatch, sample_resume: Path, db_user, tm
     assert result.get("ok") is True
     assert "Python" in (result.get("answer") or {}).get("text", "")
     assert result.get("conversation_id")
+    assert result.get("usage") == {"tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+
+    with session_scope() as db:
+        types = sorted(
+            event.event_type
+            for event in db.exec(select(UsageEvent).where(UsageEvent.user_id == db_user)).all()
+            if event.event_type.startswith("rag.")
+        )
+    assert types == ["rag.faithfulness", "rag.generate", "rag.query_understanding"]

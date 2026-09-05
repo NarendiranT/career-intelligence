@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,11 +24,23 @@ class ChatRequest(BaseModel):
     job_ids: list[UUID] = Field(default_factory=list)
     stream: bool = False
     conversation_id: UUID | None = None
+    temperature: float = Field(default=0.7, ge=0, le=2)
+    top_p: float = Field(default=1, ge=0, le=1)
+    max_tokens: int = Field(default=1024, ge=64, le=8192)
+    system_prompt: str = ""
+    web_search: bool = False
+    model: str = ""
 
 
 class CitationOut(BaseModel):
     id: str
     label: str
+
+
+class TokenUsageOut(BaseModel):
+    tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 class ChatResponse(BaseModel):
@@ -36,6 +49,21 @@ class ChatResponse(BaseModel):
     citations: list[CitationOut] = Field(default_factory=list)
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
+    usage: TokenUsageOut = Field(default_factory=TokenUsageOut)
+
+
+class UsageByEventOut(BaseModel):
+    event_type: str
+    tokens: int
+    count: int
+
+
+class UsageSummaryOut(BaseModel):
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    event_count: int = 0
+    by_event_type: list[UsageByEventOut] = Field(default_factory=list)
 
 
 class HomeStatsOut(BaseModel):
@@ -45,13 +73,28 @@ class HomeStatsOut(BaseModel):
     saved_result_count: int
 
 
-class HomeConversationOut(BaseModel):
+class ConversationOut(BaseModel):
     id: UUID
     title: str
     updated_at: datetime | None = None
 
 
+class ConversationMessageOut(BaseModel):
+    id: UUID
+    role: str
+    content: str
+    citations: list[CitationOut] = Field(default_factory=list)
+    extra: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
+
+class ConversationDetailOut(ConversationOut):
+    resume_id: UUID | None = None
+    job_ids: list[UUID] = Field(default_factory=list)
+    messages: list[ConversationMessageOut] = Field(default_factory=list)
+
+
 class HomeSummaryOut(BaseModel):
     documents: list[DocumentOut]
     stats: HomeStatsOut
-    conversations: list[HomeConversationOut]
+    conversations: list[ConversationOut]
