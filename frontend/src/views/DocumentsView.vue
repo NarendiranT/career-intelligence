@@ -1,140 +1,59 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, FileText, Search } from '@lucide/vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ChevronLeft, ChevronRight, FileText, LoaderCircle, Search, Trash2 } from '@lucide/vue'
+import { deleteDocument, listDocuments } from '@/api/documents'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import {
+  applyDocumentUpdate,
+  removeDocument,
+  useDocumentRealtime,
+  type DocumentRealtimeEvent,
+} from '@/composables/useDocumentRealtime'
+import { showToast } from '@/composables/useToast'
+import type { ApiDocument, DocumentStatus } from '@/types/document'
+import { formatBytes } from '@/types/upload'
+import { formatRelativeTime } from '@/utils/time'
 
-type DocStatus = 'processed' | 'uploaded' | 'processing'
 type DocTab = 'resumes' | 'jobs'
 
-type LibraryFile = {
-  id: string
-  name: string
-  sizeLabel: string
-  uploadedLabel: string
-  status: DocStatus
-}
+const PAGE_SIZE = 10
 
 const tab = ref<DocTab>('resumes')
 const query = ref('')
 const page = ref(1)
-const pageSize = 5
+const loading = ref(true)
+const error = ref('')
+const documents = ref<ApiDocument[]>([])
+const pendingDelete = ref<ApiDocument | null>(null)
+const deleting = ref(false)
 
-const resumes: LibraryFile[] = [
-  {
-    id: 'resume-1',
-    name: 'John_Doe_Resume.pdf',
-    sizeLabel: '245 KB',
-    uploadedLabel: 'Uploaded 2 hours ago',
-    status: 'processed',
-  },
-  {
-    id: 'resume-2',
-    name: 'software-engineer-resume.pdf',
-    sizeLabel: '198 KB',
-    uploadedLabel: 'Uploaded just now',
-    status: 'uploaded',
-  },
-  {
-    id: 'resume-3',
-    name: 'Cover_Letter_Draft.docx',
-    sizeLabel: '86 KB',
-    uploadedLabel: 'Uploaded 5 days ago',
-    status: 'processing',
-  },
-]
+const resumes = computed(() => documents.value.filter((doc) => doc.doc_type !== 'job'))
+const jobs = computed(() => documents.value.filter((doc) => doc.doc_type === 'job'))
+const source = computed(() => (tab.value === 'resumes' ? resumes.value : jobs.value))
 
-const jobs: LibraryFile[] = [
-  {
-    id: 'job-1',
-    name: 'Senior AI Engineer - Acme Corp.pdf',
-    sizeLabel: '312 KB',
-    uploadedLabel: 'Uploaded 2 minutes ago',
-    status: 'uploaded',
-  },
-  {
-    id: 'job-2',
-    name: 'Machine Learning Engineer - TechCo.pdf',
-    sizeLabel: '428 KB',
-    uploadedLabel: 'Uploaded 3 minutes ago',
-    status: 'processed',
-  },
-  {
-    id: 'job-3',
-    name: 'GenAI Platform Engineer - InnovateAI.pdf',
-    sizeLabel: '276 KB',
-    uploadedLabel: 'Uploaded 4 minutes ago',
-    status: 'processed',
-  },
-  {
-    id: 'job-4',
-    name: 'Senior_AI_Engineer_JD.pdf',
-    sizeLabel: '301 KB',
-    uploadedLabel: 'Uploaded 1 day ago',
-    status: 'processed',
-  },
-  {
-    id: 'job-5',
-    name: 'Staff Backend Engineer - CloudNine.pdf',
-    sizeLabel: '254 KB',
-    uploadedLabel: 'Uploaded 2 days ago',
-    status: 'processed',
-  },
-  {
-    id: 'job-6',
-    name: 'Applied Scientist - Northstar.pdf',
-    sizeLabel: '389 KB',
-    uploadedLabel: 'Uploaded 4 days ago',
-    status: 'processed',
-  },
-  {
-    id: 'job-7',
-    name: 'LLM Platform Engineer - Helix.pdf',
-    sizeLabel: '221 KB',
-    uploadedLabel: 'Uploaded 1 week ago',
-    status: 'uploaded',
-  },
-  {
-    id: 'job-8',
-    name: 'Data Scientist - BrightPath.pdf',
-    sizeLabel: '198 KB',
-    uploadedLabel: 'Uploaded 1 week ago',
-    status: 'processed',
-  },
-  {
-    id: 'job-9',
-    name: 'MLOps Engineer - Orbit Labs.pdf',
-    sizeLabel: '267 KB',
-    uploadedLabel: 'Uploaded 2 weeks ago',
-    status: 'processing',
-  },
-  {
-    id: 'job-10',
-    name: 'Product Engineer - InsightAI.pdf',
-    sizeLabel: '184 KB',
-    uploadedLabel: 'Uploaded 3 weeks ago',
-    status: 'processed',
-  },
-]
+function sizeLabel(doc: ApiDocument): string {
+  return doc.size == null ? '—' : formatBytes(doc.size)
+}
 
-const source = computed(() => (tab.value === 'resumes' ? resumes : jobs))
+function uploadedLabel(doc: ApiDocument): string {
+  const relative = formatRelativeTime(doc.created_at)
+  return relative ? `Uploaded ${relative}` : 'Uploaded'
+}
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return source.value
-  return source.value.filter(
-    (row) =>
-      row.name.toLowerCase().includes(q) ||
-      row.status.toLowerCase().includes(q) ||
-      row.sizeLabel.toLowerCase().includes(q),
-  )
+  return source.value.filter((row) => {
+    const haystack = [row.filename, row.status, sizeLabel(row), uploadedLabel(row)].join(' ').toLowerCase()
+    return haystack.includes(q)
+  })
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)))
 
 const rows = computed(() => {
-  if (tab.value === 'resumes') return filtered.value
-  const start = (page.value - 1) * pageSize
-  return filtered.value.slice(start, start + pageSize)
+  const start = (page.value - 1) * PAGE_SIZE
+  return filtered.value.slice(start, start + PAGE_SIZE)
 })
 
 watch(tab, () => {
@@ -150,17 +69,67 @@ watch(totalPages, (next) => {
   if (page.value > next) page.value = next
 })
 
-function statusClass(status: DocStatus) {
+function statusClass(status: DocumentStatus) {
   if (status === 'processed') return 'bg-emerald-50 text-emerald-600'
   if (status === 'processing') return 'bg-blue-50 text-brand'
+  if (status === 'failed') return 'bg-red-50 text-red-500'
   return 'bg-slate-100 text-slate-600'
 }
 
-function statusLabel(status: DocStatus) {
+function statusLabel(status: DocumentStatus) {
   if (status === 'processed') return 'Processed'
   if (status === 'processing') return 'Processing'
+  if (status === 'failed') return 'Failed'
   return 'Uploaded'
 }
+
+async function loadDocuments(): Promise<void> {
+  loading.value = true
+  error.value = ''
+  try {
+    documents.value = await listDocuments()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load documents.'
+    documents.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+function onDocumentEvent(event: DocumentRealtimeEvent): void {
+  if (event.type === 'document.status' && event.document) {
+    documents.value = applyDocumentUpdate(documents.value, event.document)
+    return
+  }
+  if (event.type === 'document.deleted' && event.document_id) {
+    documents.value = removeDocument(documents.value, event.document_id)
+    if (pendingDelete.value?.id === event.document_id) {
+      pendingDelete.value = null
+    }
+  }
+}
+
+useDocumentRealtime(onDocumentEvent)
+
+async function confirmDelete(): Promise<void> {
+  const target = pendingDelete.value
+  if (!target || deleting.value) return
+  deleting.value = true
+  try {
+    await deleteDocument(target.id)
+    documents.value = removeDocument(documents.value, target.id)
+    showToast(`Deleted ${target.filename}`, 'success')
+    pendingDelete.value = null
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not delete this document.', 'error')
+  } finally {
+    deleting.value = false
+  }
+}
+
+onMounted(() => {
+  void loadDocuments()
+})
 </script>
 
 <template>
@@ -169,8 +138,13 @@ function statusLabel(status: DocStatus) {
       <p class="text-[11px] font-bold tracking-[0.16em] text-brand uppercase">Library</p>
       <h1 class="mt-1 text-[1.65rem] font-extrabold text-slate-800">My Documents</h1>
       <p class="mt-2 max-w-2xl text-sm text-slate-500">
-        Browse resumes and job descriptions already in this workspace. Search either tab; job
-        descriptions are paginated.
+        Browse resumes and job descriptions already in this workspace. Indexing status updates live
+        as each file is processed. Search either tab; results are shown 10 per page.
+      </p>
+
+      <p v-if="error" class="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        {{ error }}
+        <button class="ml-2 font-semibold underline" type="button" @click="loadDocuments">Retry</button>
       </p>
 
       <div class="mt-6 rounded-2xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -214,11 +188,26 @@ function statusLabel(status: DocStatus) {
                 <th class="px-5 py-3">Size</th>
                 <th class="px-5 py-3">Uploaded</th>
                 <th class="px-5 py-3">Status</th>
+                <th class="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="rows.length === 0">
-                <td class="px-5 py-10 text-center text-slate-400" colspan="4">No documents match your search.</td>
+              <tr v-if="loading">
+                <td class="px-5 py-10 text-center text-slate-400" colspan="5">
+                  <span class="inline-flex items-center gap-2">
+                    <LoaderCircle class="h-4 w-4 animate-spin" />
+                    Loading documents…
+                  </span>
+                </td>
+              </tr>
+              <tr v-else-if="source.length === 0">
+                <td class="px-5 py-10 text-center text-slate-400" colspan="5">
+                  No {{ tab === 'resumes' ? 'resumes' : 'job descriptions' }} yet.
+                  <RouterLink to="/upload" class="font-semibold text-brand hover:underline">Upload one</RouterLink>
+                </td>
+              </tr>
+              <tr v-else-if="rows.length === 0">
+                <td class="px-5 py-10 text-center text-slate-400" colspan="5">No documents match your search.</td>
               </tr>
               <tr v-for="row in rows" :key="row.id" class="border-b border-slate-50 last:border-0">
                 <td class="px-5 py-3">
@@ -229,27 +218,41 @@ function statusLabel(status: DocStatus) {
                     >
                       <FileText class="h-4 w-4" />
                     </span>
-                    <span class="font-medium text-slate-800">{{ row.name }}</span>
+                    <span class="font-medium text-slate-800">{{ row.filename }}</span>
                   </div>
                 </td>
-                <td class="px-5 py-3 text-slate-500">{{ row.sizeLabel }}</td>
-                <td class="px-5 py-3 text-slate-500">{{ row.uploadedLabel }}</td>
+                <td class="px-5 py-3 text-slate-500">{{ sizeLabel(row) }}</td>
+                <td class="px-5 py-3 text-slate-500">{{ uploadedLabel(row) }}</td>
                 <td class="px-5 py-3">
-                  <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize" :class="statusClass(row.status)">
+                  <span
+                    class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize"
+                    :class="statusClass(row.status)"
+                    :title="row.error_message || undefined"
+                  >
+                    <LoaderCircle v-if="row.status === 'processing'" class="h-3 w-3 animate-spin" />
                     {{ statusLabel(row.status) }}
                   </span>
+                </td>
+                <td class="px-5 py-3 text-right">
+                  <button
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50"
+                    type="button"
+                    :aria-label="`Delete ${row.filename}`"
+                    @click="pendingDelete = row"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" />
+                    Delete
+                  </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <div
-          v-if="tab === 'jobs'"
-          class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3"
-        >
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
           <p class="text-xs text-slate-400">
-            Showing {{ rows.length }} of {{ filtered.length }} job descriptions
+            Showing {{ rows.length }} of {{ filtered.length }}
+            {{ tab === 'resumes' ? 'resumes' : 'job descriptions' }}
           </p>
           <div class="flex items-center gap-1">
             <button
@@ -272,6 +275,41 @@ function statusLabel(status: DocStatus) {
               <ChevronRight class="h-4 w-4" />
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="pendingDelete"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-doc-title"
+    >
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 id="delete-doc-title" class="text-lg font-bold text-slate-900">Delete this file?</h2>
+        <p class="mt-2 text-sm text-slate-500">
+          <span class="font-medium text-slate-800">{{ pendingDelete.filename }}</span>
+          will be removed from your library, including indexed chunks. This cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end gap-3">
+          <button
+            class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            type="button"
+            :disabled="deleting"
+            @click="pendingDelete = null"
+          >
+            Cancel
+          </button>
+          <button
+            class="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+            type="button"
+            :disabled="deleting"
+            @click="confirmDelete"
+          >
+            <LoaderCircle v-if="deleting" class="h-4 w-4 animate-spin" />
+            Delete
+          </button>
         </div>
       </div>
     </div>

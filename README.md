@@ -6,7 +6,7 @@ AI-powered career assistant. Upload a resume, add job descriptions, and get skil
 
 ```text
 career-intelligence/
-├── frontend/   Vue 3 app (JWT session; dashboard is mocked data)
+├── frontend/   Vue 3 app (JWT session; upload + documents live)
 ├── backend/    FastAPI + SQLModel (documents + chat)
 ├── agent/      LangGraph indexing and RAG graphs
 ├── mcp/        MCP-style tools
@@ -27,7 +27,7 @@ Open http://localhost:5173
 
 ## Backend
 
-Requires **Python 3.12+**, **Docker** (Postgres 16 + pgvector), and an **OpenAI API key** for indexing and chat.
+Requires **Python 3.12+**, **Docker** (Postgres 16 + pgvector), and a **Groq API key** for chat. Embeddings run locally from a Hugging Face sentence-transformers model.
 
 1. Copy env and fill secrets (repo root):
 
@@ -37,8 +37,10 @@ cp .env.example .env
 
 Set at least:
 
-- `OPENAI_API_KEY` — required for document indexing and RAG chat
+- `GROQ_API_KEY` — required for indexing and RAG chat
 - `JWT_SECRET` — change from the example value; used to sign login tokens
+
+Optional: `HF_TOKEN` for gated Hugging Face embedding models. `EMBEDDING_MODEL` defaults to `sentence-transformers/all-MiniLM-L6-v2`. If you change the embedding model, set `EMBEDDING_DIM` to that model's vector size and re-run migrations/re-index.
 
 `DATABASE_URL` already matches Docker Compose (`career` / `career` / `career_intelligence` on port **5432**).
 
@@ -68,5 +70,5 @@ See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples.
 
 ## Status
 
-- Frontend: signup/signin JWT session, guarded dashboard (upload/chat still mocked)
-- Backend: email/password JWT, indexing + RAG agents, Postgres/pgvector, FastAPI upload and chat/SSE
+- Frontend: signup/signin JWT session, guarded dashboard, upload → My Documents with live indexing status
+- Backend: email/password JWT, indexing + RAG agents, Postgres/pgvector, FastAPI upload, document WebSocket, chat/SSE

@@ -86,7 +86,7 @@ def input_guardrail(state: RagState) -> dict[str, Any]:
 
 
 def query_understanding(state: RagState) -> dict[str, Any]:
-    llm = get_chat_model()
+    llm = get_chat_model(role="router")
     structured = llm.with_structured_output(QueryPlan)
     plan: QueryPlan = structured.invoke(
         [
@@ -145,7 +145,7 @@ def build_prompt(state: RagState) -> dict[str, Any]:
 
 
 def generate_answer(state: RagState) -> dict[str, Any]:
-    llm = get_chat_model(temperature=0.2)
+    llm = get_chat_model(role="generation", temperature=0.2)
     structured = llm.with_structured_output(GeneratedAnswer)
     chunk_block = "\n\n".join(
         f"[{item['filename']}]\n{item['content']}" for item in (state.get("chunks") or [])
@@ -175,7 +175,7 @@ def generate_answer(state: RagState) -> dict[str, Any]:
 
 
 def validate_answer(state: RagState) -> dict[str, Any]:
-    llm = get_chat_model()
+    llm = get_chat_model(role="router")
     structured = llm.with_structured_output(FaithfulnessResult)
     result: FaithfulnessResult = structured.invoke(
         [
@@ -232,7 +232,7 @@ def stream_and_persist(state: RagState) -> dict[str, Any]:
         user_id=user_id,
         conversation_id=convo_id,
         event_type="chat",
-        model=settings.chat_model,
+        model=settings.generation_model,
     )
     tools.invoke("web_search", query=state["question"], enabled=False)
     return {"conversation_id": str(convo_id), "answer": answer}

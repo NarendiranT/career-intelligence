@@ -13,6 +13,7 @@ import {
 } from '@lucide/vue'
 import { fetchHomeSummary } from '@/api/home'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { applyDocumentUpdate, removeDocument, useDocumentRealtime } from '@/composables/useDocumentRealtime'
 import type { HomeConversation, HomeDocument, HomeStats } from '@/types/home'
 import { formatRelativeTime } from '@/utils/time'
 
@@ -55,6 +56,21 @@ async function loadHome(): Promise<void> {
     loading.value = false
   }
 }
+
+useDocumentRealtime((event) => {
+  if (event.type === 'document.status') {
+    documents.value = applyDocumentUpdate(documents.value, event.document)
+    return
+  }
+  const removed = documents.value.find((row) => row.id === event.document_id)
+  documents.value = removeDocument(documents.value, event.document_id)
+  if (!removed) return
+  if (removed.doc_type === 'job') {
+    stats.value = { ...stats.value, job_count: Math.max(0, stats.value.job_count - 1) }
+  } else if (removed.doc_type === 'resume') {
+    stats.value = { ...stats.value, resume_count: Math.max(0, stats.value.resume_count - 1) }
+  }
+})
 
 onMounted(() => {
   void loadHome()
@@ -146,7 +162,7 @@ onMounted(() => {
         </RouterLink>
 
         <RouterLink
-          to="/chat"
+          to="/interview"
           class="group rounded-2xl border border-orange-100 bg-[#fff4ec] p-5 transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-orange-500 shadow-sm">

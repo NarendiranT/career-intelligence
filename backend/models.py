@@ -90,11 +90,19 @@ class Document(SQLModel, table=True):
     )
     resume_profile: ResumeProfile | None = Relationship(
         back_populates="document",
-        sa_relationship=sa_relationship("ResumeProfile", back_populates="document"),
+        sa_relationship=sa_relationship(
+            "ResumeProfile",
+            back_populates="document",
+            cascade="all, delete-orphan",
+        ),
     )
     job_profile: JobProfile | None = Relationship(
         back_populates="document",
-        sa_relationship=sa_relationship("JobProfile", back_populates="document"),
+        sa_relationship=sa_relationship(
+            "JobProfile",
+            back_populates="document",
+            cascade="all, delete-orphan",
+        ),
     )
 
 

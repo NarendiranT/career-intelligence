@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import AppToasts from '@/components/layout/AppToasts.vue'
 </script>
 
 <template>
+  <AppToasts />
   <RouterView />
 </template>

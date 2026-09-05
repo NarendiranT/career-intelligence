@@ -1,19 +1,22 @@
 # Career Intelligence agents
 
-Two LangGraph agents power indexing and grounded Q&A. The Vue app uses JWT auth. Home loads `GET /v1/home`; documents and chat UI are not wired yet.
+The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to `POST /v1/documents`, then My Documents loads `GET /v1/documents` and listens on `WS /v1/ws/documents` for indexing status. Chat UI is not wired yet.
 
 ## Stack
 
 - FastAPI + SQLModel on port 8000
 - PostgreSQL 16 + pgvector (Docker)
-- OpenAI (`gpt-4o-mini`, `text-embedding-3-small`)
+- Groq chat via LangChain `ChatGroq`: extraction/router `openai/gpt-oss-20b`, generation `openai/gpt-oss-120b`
+- Hugging Face embeddings (`sentence-transformers/all-MiniLM-L6-v2`, 384-d) via `HuggingFaceEmbeddings`
 - MCP-style tools in `mcp/` (in-process callables)
+
+Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# set OPENAI_API_KEY in .env
+# set GROQ_API_KEY in .env (optional HF_TOKEN for gated embedding models)
 
 docker compose up -d
 python3.12 -m venv .venv
@@ -44,6 +47,8 @@ curl -s -F "file=@resume.txt;type=text/plain" -F "doc_type=resume" \
   http://localhost:8000/v1/documents
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/documents
 ```
+
+Each upload inserts a `documents` row, then runs `indexing_graph` in a FastAPI background task. Status changes (`uploaded` → `processing` → `processed` / `failed`) are pushed on `WS /v1/ws/documents?token=<jwt>` as `{ "type": "document.status", "document": { ...DocumentOut } }`. Delete with `DELETE /v1/documents/<id>` (owner only); clients also receive `{ "type": "document.deleted", "document_id": "<uuid>" }`.
 
 ## RAG graph
 

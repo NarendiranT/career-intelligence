@@ -95,7 +95,7 @@ def upgrade() -> None:
         ),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("embedding", Vector(1536), nullable=False),
+        sa.Column("embedding", Vector(384), nullable=False),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
         sa.Column("ordinal", sa.Integer(), nullable=False, server_default="0"),
     )

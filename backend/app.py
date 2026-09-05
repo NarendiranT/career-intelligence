@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,10 +10,12 @@ from sqlalchemy import text
 from backend.config import settings
 from backend.db import engine
 from backend.errors import MissingLLMConfigError
+from backend.realtime import document_events
 from backend.routers.auth import router as auth_router
 from backend.routers.chat import router as chat_router
 from backend.routers.documents import router as documents_router
 from backend.routers.home import router as home_router
+from backend.routers.ws import router as ws_router
 
 app = FastAPI(title="Career Intelligence API", version="0.1.0")
 app.add_middleware(
@@ -26,11 +30,13 @@ app.include_router(auth_router)
 app.include_router(home_router)
 app.include_router(documents_router)
 app.include_router(chat_router)
+app.include_router(ws_router)
 
 
 @app.on_event("startup")
-def on_startup() -> None:
+async def on_startup() -> None:
     settings.uploads_dir.mkdir(parents=True, exist_ok=True)
+    document_events.bind_loop(asyncio.get_running_loop())
 
 
 @app.exception_handler(MissingLLMConfigError)

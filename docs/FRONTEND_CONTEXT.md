@@ -6,7 +6,7 @@ This document describes the **implemented** Vue frontend as of the current sourc
 **App code:** `frontend/`  
 **This file:** `docs/FRONTEND_CONTEXT.md`
 
-Auth (register/login/`/me`) is wired to FastAPI with a JWT stored in `localStorage`. The home dashboard loads `GET /v1/home`. Upload, documents list, and chat UI are still mocked. There is **no WebSocket** in the frontend.
+Auth (register/login/`/me`) is wired to FastAPI with a JWT stored in `localStorage`. Home loads `GET /v1/home`. Upload posts files to `POST /v1/documents` then navigates to My Documents (`GET /v1/documents`). Indexing status arrives on `WS /v1/ws/documents?token=…`. Chat UI is still mocked.
 
 ---
 
@@ -18,17 +18,18 @@ Career Intelligence is intended as an AI career assistant: users upload a resume
 
 ### Current frontend scope
 
-Seven routes exist. Auth is live; dashboard data is still mocked.
+Dashboard routes plus 404 and maintenance exist. Auth, home, upload, and My Documents are live; chat and interview practice are still local UI.
 
 | Implemented UI | Backend wired? |
 | --- | --- |
 | Sign up | Yes (`POST /v1/auth/register`) |
 | Sign in | Yes (`POST /v1/auth/login`) |
 | Home dashboard | Yes (`GET /v1/home`) |
-| Upload documents | No (browser `File` objects + seeded list rows only) |
-| My Documents | No (seeded tables + client search/pagination) |
+| Upload documents | Yes (`POST /v1/documents` per file; Continue then `/documents`) |
+| My Documents | Yes (`GET /v1/documents` + `WS /v1/ws/documents`) |
 | Analysis & Insights | No (coming-soon page only) |
 | Chat with assistant | No (local `ref` arrays + fake assistant replies) |
+| Prepare for Interviews | No (local topic chat + settings; no interview API) |
 
 There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api/client.ts`). Leave `VITE_API_BASE_URL` empty to use the Vite `/v1` proxy. Dashboard routes use `meta.requiresAuth`.
 
@@ -37,10 +38,11 @@ There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api
 1. **Landing = sign up** (`/`): marketing panel + create-account form. Client-side validation, then register API. Success stores JWT and navigates to `/home` (or `?next=`).
 2. **Sign in** (`/signin`): same split layout; login API with optional remember-me (longer JWT TTL). Guest-only: authenticated users are sent to `/home`.
 3. **Home** (`/home`): dashboard chrome (requires auth). Hero, quick actions, and live recent documents / stats / conversations from `GET /v1/home`.
-4. **Upload** (`/upload`): dashboard chrome. Seeded resume + JD file rows. User can add/remove files in memory. **Continue** has no handler.
-5. **My Documents** (`/documents`): two tabs (resumes / job descriptions), search, JD pagination. Seeded lists, not shared with upload.
+4. **Upload** (`/upload`): dashboard chrome. Empty resume/JD lists until the user adds files (multiple of each). **View sample** opens a PDF modal. **Continue** uploads every pending file then goes to `/documents`.
+5. **My Documents** (`/documents`): two tabs (resumes / job descriptions), search, 10-per-page pagination. Loaded from `GET /v1/documents`; status badges update over the document WebSocket.
 6. **Analysis** (`/analysis`): coming-soon placeholder.
 7. **Chat** (`/chat`): dashboard chrome. Seeded conversation. Sending a message appends a user bubble and an immediately fabricated assistant bubble. Resume/JD picks live in the right panel and are **not** loaded from the upload page.
+8. **Prepare for Interviews** (`/interview`): dashboard chrome with Interview Topics in the left nav (above Settings). Topic chat is local until an interview API exists.
 
 Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 
@@ -57,10 +59,10 @@ Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 | CSS | Tailwind CSS **v4** via `@import "tailwindcss"` and `@tailwindcss/vite` |
 | Icons | `@lucide/vue` |
 | Font | Inter from Google Fonts in `frontend/index.html` |
-| State | Component `ref` / `computed` / `defineModel`; module composables `useSidebar` and `useAuth` |
+| State | Component `ref` / `computed` / `defineModel`; module composables `useSidebar`, `useAuth`, `useToast` |
 | API client | `frontend/src/api/client.ts` (`fetch` + Bearer token) |
 | Auth | Email/password JWT in `localStorage` key `ci.accessToken`; no OAuth SDK |
-| WebSocket / SSE | **None** |
+| WebSocket / SSE | Document status WebSocket (`useDocumentRealtime`); chat SSE not used |
 | Tests | **None** in `frontend/` |
 
 Path alias: `@` → `frontend/src` (`vite.config.ts` and `tsconfig.app.json`).
@@ -99,7 +101,7 @@ career-intelligence/
         ├── vite-env.d.ts
         ├── router/index.ts
         ├── api/client.ts, token.ts, auth.ts
-        ├── composables/useSidebar.ts, useAuth.ts
+        ├── composables/useSidebar.ts, useAuth.ts, useToast.ts, useInterview.ts, useDocumentRealtime.ts
         ├── types/upload.ts, chat.ts, auth.ts
         ├── views/
         ├── components/
@@ -107,7 +109,8 @@ career-intelligence/
         │   ├── signup/
         │   ├── signin/
         │   ├── upload/
-        │   └── chat/
+        │   ├── chat/
+        │   └── interview/
 ```
 
 | Path | Purpose |
@@ -116,14 +119,14 @@ career-intelligence/
 | `frontend/src/components/layout/` | Shared dashboard shell (sidebar, top bar, layout) |
 | `frontend/src/components/signup/` | Auth marketing + signup form primitives |
 | `frontend/src/components/signin/` | Sign-in form only |
-| `frontend/src/components/upload/` | Upload dropzones, file rows, tips column |
+| `frontend/src/components/upload/` | Upload dropzones, file rows, sample PDF modal, tips column |
 | `frontend/src/components/chat/` | Messages, composer, right context/settings panel |
-| `frontend/src/types/` | Auth, upload, and chat TypeScript types + mock library list |
-| `frontend/src/api/` | Fetch wrapper, token storage, auth and home endpoints |
-| `frontend/src/composables/` | `useSidebar`, `useAuth` |
-| `frontend/public/` | Static assets served as `/favicon.svg`, `/images/...` |
+| `frontend/src/components/interview/` | Interview messages, composer, right settings panel |
+| `frontend/src/types/` | Auth, home, documents, upload, chat, and interview TypeScript types |
+| `frontend/src/composables/` | `useSidebar`, `useAuth`, `useToast`, `useInterview`, `useDocumentRealtime` |
+| `frontend/public/` | Static assets: `/favicon.svg`, `/samples/*.pdf` |
 
-`App.vue` is only `<RouterView />`.
+`App.vue` mounts `AppToasts` (top-of-viewport notifications) and `<RouterView />`.
 
 ---
 
@@ -131,7 +134,7 @@ career-intelligence/
 
 Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to `Career Intelligence — ${meta.title}`.
 
-`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network. Guest routes: `/`, `/signin`. Protected: `/home`, `/upload`, `/documents`, `/analysis`, `/chat`. Session presence is the `ci.accessToken` localStorage key. There is **no** catch-all 404 route.
+`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`. Protected: `/home`, `/upload`, `/documents`, `/analysis`, `/chat`, `/interview`. Session presence is the `ci.accessToken` localStorage key. Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
 
 ### `/` — `signup` — `frontend/src/views/SignupView.vue`
 
@@ -154,18 +157,19 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 ### `/upload` — `upload` — `frontend/src/views/UploadView.vue`
 
 - Wrapped in `DashboardLayout` with `#right` = `UploadInfoSidebar`.
-- Resume: single-file dropzone (replaces list). JD: multi-file dropzone **or** paste-text tab.
-- Seeded demo rows on load (see section 10).
-- **Status:** Local file picking works; no upload HTTP; Continue is inert.
+- Resume and JD: multi-file dropzones. JD also has a paste-text tab (kept as a `.txt` `File`).
+- File lists start empty. **View sample** opens a modal with a static PDF (`frontend/public/samples/`).
+- **Continue** posts each file to `POST /v1/documents` with `doc_type`, then navigates to `/documents`.
+- **Status:** Wired to the upload API.
 
 ### `/documents` — `documents` — `frontend/src/views/DocumentsView.vue`
 
 - `DashboardLayout` with **no** right slot.
-- Tabs: **My Resumes** and **Job Descriptions**. Search filters the active tab by name, size, or status.
-- Tables: name, size, uploaded label, status (`uploaded` / `processing` / `processed`).
-- Job descriptions paginate at 5 rows per page; resumes show the full filtered list.
-- Seeded independently of `UploadView` / `documentLibrary`.
-- **Status:** UI demo only.
+- Tabs: **My Resumes** and **Job Descriptions**. Search filters the active tab by name, size, status, or uploaded label.
+- Tables: name, size, uploaded label, status (`uploaded` / `processing` / `processed` / `failed`). Processing shows a spinner. **Delete** confirms then calls `DELETE /v1/documents/{id}`.
+- Both tabs paginate at 10 rows per page.
+- Documents come from `GET /v1/documents` (`frontend/src/api/documents.ts`). Live patches come from `useDocumentRealtime` (`WS /v1/ws/documents?token=`). Untyped rows (`doc_type` null) appear under resumes.
+- **Status:** Wired to the documents list API and status WebSocket.
 
 ### `/analysis` — `analysis` — `frontend/src/views/AnalysisView.vue`
 
@@ -178,9 +182,27 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 - Seeded thread; `send()` pushes fake replies.
 - **Status:** UI complete as a demo; not connected to a model or document store.
 
+### `/interview` — `interview` — `frontend/src/views/InterviewView.vue`
+
+- `DashboardLayout` with `show-interview-topics` and `#right` = `InterviewRightPanel`.
+- Left sidebar **Interview Topics** sit **above** Settings / Help (not below them). Topics come from `useInterview()`.
+- Main: topic title, Change Topic menu, seeded Python list-vs-tuple thread (table + code). Other topics start with a greeting.
+- Right: Practice / Mock, response style, difficulty, toggles, session context, Clear Chat.
+- **Status:** UI complete as a demo; `send()` is local (no interview API).
+
+### `/maintenance` — `maintenance` — `frontend/src/views/MaintenanceView.vue`
+
+- Full-page (no dashboard chrome). Copy: Down for Maintenance.
+- **Status:** Also the target of every URL when `VITE_DOWNTIME` is set.
+
+### Unknown paths — `not-found` — `frontend/src/views/NotFoundView.vue`
+
+- Full-page 404. CTA to `/home` if authenticated, otherwise `/`.
+- **Status:** Catch-all `/:pathMatch(.*)*`.
+
 ### Sidebar labels that are **not** routes
 
-In `AppSidebar.vue`, these have `to: null` (rendered as `<div>`, not `RouterLink`): Saved Results, Settings, Help & Support. Home, Upload, My Documents, Analysis, and Chat are real routes.
+In `AppSidebar.vue`, Settings and Help & Support are labels only (`<div>`). Home, Upload, My Documents, Analysis, Chat, and Prepare for Interviews are real routes.
 
 ---
 
@@ -188,14 +210,17 @@ In `AppSidebar.vue`, these have `to: null` (rendered as `<div>`, not `RouterLink
 
 ### Layout
 
+**`AppToasts.vue`**  
+No props. Renders `useToast()` items at the top of the viewport. Error toasts are red (`role="alert"`).
+
 **`DashboardLayout.vue`**  
-Props: `showRecentChats?: boolean`.  
+Props: `showRecentChats?: boolean`, `showInterviewTopics?: boolean`.  
 Slots: default (main), `right` (optional).  
 Uses `useSidebar()`. Viewport: `h-dvh overflow-hidden`. Left nav + top bar + main + optional right column. Main does not scroll the window; children must scroll internally.
 
 **`AppSidebar.vue`**  
-Props: `collapsed`, `showRecentChats`. Emit: `toggle`.  
-Nav items listed above. Active state: `route.path === item.to`. Collapsed width `w-16`, expanded `w-64`. Collapsed logo: hover shows `PanelLeftOpen`, click expands. Expanded: `PanelLeftClose` next to brand. Chat-only recent chats are **hardcoded** strings, not wired to `ChatView` messages. **New Chat** has no handler.
+Props: `collapsed`, `showRecentChats`, `showInterviewTopics`. Emit: `toggle`.  
+Nav items listed above. Active state: `route.path === item.to`. Collapsed width `w-16`, expanded `w-64`. Collapsed logo: hover shows `PanelLeftOpen`, click expands. Expanded: `PanelLeftClose` next to brand. Chat-only recent chats are **hardcoded** strings, not wired to `ChatView` messages. **New Chat** has no handler. On `/interview`, Interview Topics (search + list from `useInterview`) render **above** Settings / Help.
 
 **`AppTopBar.vue`**  
 No props. Bell (decorative red dot) and the authenticated user’s name/initials from `useAuth`. Dropdown: **Log out** (clears JWT, `POST /v1/auth/logout`, then `/signin`).
@@ -220,7 +245,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`DropZone.vue`** — Props: `multiple?`, `buttonLabel`, `title`, `hint`. Emit: `files: File[]`. Accept: `.pdf,.doc,.docx,.txt`. Max 10 MB (`MAX_FILE_BYTES` in `types/upload.ts`). Rejected files are dropped silently (no error UI).
 
-**`UploadedFileRow.vue`** — Prop: `file: UploadedDoc`. Emit: `remove`. Always shows a **PDF** badge regardless of extension.
+**`UploadedFileRow.vue`** — Prop: `file: UploadedDoc`. Emit: `remove`. Badge is PDF/DOCX/DOC/TXT from the filename.
 
 **`UploadInfoSidebar.vue`** — Static tips, “what happens next”, security copy. Privacy link `href="#"`.
 
@@ -229,6 +254,14 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 **`ChatMessage.vue`** — Prop: `message: ChatMessage`. User: JD avatar + blue bubble. Assistant: sparkle avatar, copy/thumbs buttons (no handlers), optional `strengths` / `gaps` / `sources`.
 
 **`ChatComposer.vue`** — `v-model:draft`, `v-model:model`. Enter sends (no Shift+Enter special case). Paperclip and globe buttons have no handlers. Model options: `deep-research`, `gpt-4o`, `claude-3.5`, `gemini-pro`. Send disabled when draft is empty.
+
+### Interview
+
+**`InterviewMessage.vue`** — user bubble (brand) and assistant card with optional table + code (copy via toast).
+
+**`InterviewComposer.vue`** — follow-up placeholder, plus/paperclip (no handlers), model select, labeled Send.
+
+**`InterviewRightPanel.vue`** — mode, style, difficulty, three checkboxes, session context, clear chat, pro tip.
 
 **`ChatRightPanel.vue`** — `defineModel`s: `tab`, `resumeId`, `jobIds`, `temperature`, `topP`, `maxTokens`, `model`, `stream`, `webSearch`, `systemPrompt`. Emit: `ask(question: string)`. Documents come from `documentLibrary` in `types/chat.ts`, **not** from `UploadView`. Tabs: Selected Documents | Chat Settings.
 
@@ -242,7 +275,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 - `lg:grid-cols-2`: left marketing (`hidden` until `lg`), right form.
 - **Not** using `DashboardLayout`. Window scroll is allowed.
 
-### Dashboard (`HomeView`, `UploadView`, `DocumentsView`, `AnalysisView`, `ChatView`)
+### Dashboard (`HomeView`, `UploadView`, `DocumentsView`, `AnalysisView`, `ChatView`, `InterviewView`)
 
 ```text
 ┌────────────┬──────────────────────────────────────────┐
@@ -280,13 +313,13 @@ JWT Bearer tokens from FastAPI. Token key: `ci.accessToken`. Session state: `use
 
 ## 8. API integration
 
-Auth and home. Base URL: `VITE_API_BASE_URL` (`frontend/.env.example`; empty = same-origin Vite proxy to port 8000). Upload, documents list, and chat still use local mock data. No WebSocket.
+Auth, home, upload, and documents list. Base URL: `VITE_API_BASE_URL` (`frontend/.env.example`; empty = same-origin Vite proxy to port 8000, including WebSockets). Chat still uses local mock data.
 
-Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Response: `documents` (up to 4), `stats` (`resume_count`, `job_count`, `insight_count`, `saved_result_count`), `conversations` (up to 5; title is the first user message). `saved_result_count` is always `0` until that feature exists. `insight_count` is assistant-message count.
+Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Upload calls `POST /v1/documents` (multipart `file` + `doc_type`) via `uploadDocument` in `frontend/src/api/documents.ts`. My Documents calls `GET /v1/documents` (full list; client filters by tab and paginates 10 per page) and subscribes to `WS /v1/ws/documents?token=<jwt>`. Any `apiFetch` response with status **500+** shows a red top toast via `showToast` (`useToast`) and still throws `ApiError`. Multipart uploads use a 120s timeout.
 
 ### Mock / local data the UI already uses
 
-**Upload seeds** (`UploadView.vue`): in-memory `UploadedDoc[]`, not files on disk.
+**Upload samples** (`frontend/public/samples/`): `sample-resume.pdf` and `sample-job-description.pdf`, shown in `SampleDocumentModal` from **View sample**. Upload lists themselves start empty.
 
 **Chat document library** (`types/chat.ts` `documentLibrary`): five static `LibraryDoc` rows.
 
@@ -308,9 +341,11 @@ No global store.
 | --- | --- | --- |
 | Sidebar collapse | `useSidebar.ts` module-level `ref`s + `localStorage` | Shared across dashboard pages in the same tab; survives reload |
 | Signup/signin fields | Form components | Lost on navigation |
-| Upload file lists | `UploadView` refs | Lost on leave; **not** shared with chat |
+| Upload file lists | `UploadView` refs | Lost on leave; server rows live on `/documents` |
+| Document WS | `useDocumentRealtime` module socket | Shared while Home or My Documents is mounted |
 | Chat messages, draft, settings, selected doc IDs | `ChatView` refs | Lost on leave |
 | Chat right-panel tab | `ChatView.tab` | Local |
+| Toasts | `useToast.ts` module `ref` | Shared; auto-dismiss ~6s |
 
 `useSidebar` hydrates once from:
 
@@ -327,23 +362,26 @@ Data flow is parent `ref` → child `v-model` / props. Chat settings (`temperatu
 
 **Resume**
 
-- `resumeFiles: UploadedDoc[]`, initially one seeded PDF row (`id: 'resume-1'`).
-- `setResume(files)` takes `files[0]`, wraps with `toUploadedDoc`, **replaces** the array (single resume).
+- `resumeFiles: UploadedDoc[]`, starts empty.
+- `addResumes` concatenates mapped `File`s (multiple resumes).
 - Remove: `resumeFiles.splice`.
+- **View sample** sets `sampleKind` to `'resume'` and shows `/samples/sample-resume.pdf` in `SampleDocumentModal`.
 
 **Job descriptions**
 
-- `jobFiles` seeded with three PDF-named rows (`job-1` … `job-3`).
+- `jobFiles` starts empty.
 - `jobTab`: `'files' | 'paste'`.
 - `addJobs` concatenates mapped `File`s.
-- `addPastedJob` creates a synthetic `.txt` `UploadedDoc` from the first line of pasted text; **the pasted body is discarded** after that (not stored).
+- `addPastedJob` creates a real `File` (`text/plain`) so Continue can upload the pasted body.
 - Remove: splice by index.
 
-**IDs:** `toUploadedDoc` builds `id` from name, size, `lastModified`, and a random suffix. Seeded IDs are stable strings like `'resume-1'` but are **not** the same store as chat.
+**IDs:** `toUploadedDoc` builds `id` from name, size, `lastModified`, and a random suffix. Each row keeps the original `File`. These are **not** the same store as chat.
 
-**Continue:** `<button type="button">` with no `@click`.
+JD **View sample** shows `/samples/sample-job-description.pdf` in the same modal.
 
-There is **no** shared document store, Pinia, provide/inject, or query params passing upload IDs into `/chat`.
+**Continue:** uploads every pending resume/JD via `POST /v1/documents`, then `router.push('/documents')`. Disabled with no files; shows a spinner while posting.
+
+There is **no** shared document store, Pinia, provide/inject, or query params passing upload IDs into `/chat`. My Documents and Home patch rows from the WebSocket.
 
 ### Chat page selection (`ChatRightPanel` + `ChatView`)
 
@@ -429,11 +467,12 @@ export type UploadedDoc = {
   name: string
   sizeLabel: string
   uploadedLabel: string
-  status: 'uploaded'  // literal only
+  status: 'ready'
+  file: File
 }
 ```
 
-Helpers: `formatBytes`, `MAX_FILE_BYTES` (10 MiB), `ACCEPTED_TYPES`, `ACCEPTED_EXTENSIONS`, `isAcceptedFile`, `toUploadedDoc`.
+Helpers: `formatBytes`, `fileBadge`, `MAX_FILE_BYTES` (10 MiB), `ACCEPTED_TYPES`, `ACCEPTED_EXTENSIONS`, `isAcceptedFile`, `toUploadedDoc`.
 
 ### `frontend/src/types/chat.ts`
 
@@ -469,11 +508,14 @@ Chat settings in `ChatView` are plain `ref`s, not a named type: `temperature` (0
 
 ## 14. Environment variables
 
-**None are read by the app.**
+Read via `import.meta.env` (`frontend/src/vite-env.d.ts` and `frontend/src/config/env.ts`):
 
-`frontend/src/vite-env.d.ts` only references Vite client types and `*.vue` modules. There is no `ImportMetaEnv` with `VITE_API_URL`.
+| Variable | Effect |
+| --- | --- |
+| `VITE_API_BASE_URL` | API origin. Empty = same-origin Vite `/v1` proxy |
+| `VITE_DOWNTIME` | `true` / `1` / `yes` / `on` sends every URL to `/maintenance` |
 
-Do not add secrets to git. `.gitignore` already ignores `.env` and `.env.local`.
+Vite only picks these up at **dev-server / build** start. Do not add secrets to git. `.gitignore` already ignores `.env` and `.env.local`.
 
 ---
 
@@ -503,12 +545,15 @@ These work in the browser without a backend:
 - Document title updates per route
 - Dashboard shell: fixed left nav, top bar, inner scrolling, collapsible left/right sidebars with persistence
 - Home: hero, quick actions, live documents/stats/conversations from `/v1/home`
-- My Documents: resume/JD tabs, search, JD pagination
+- My Documents: resume/JD tabs, search, 10-per-page pagination from `/v1/documents`
 - Analysis: coming-soon page
-- Upload: drag-and-drop / file picker with type and size filter; replace resume; add/remove JDs; paste-text as a named `.txt` row
+- Upload: drag-and-drop / file picker with type and size filter; add/remove resumes and JDs; paste-text as a `.txt` file; Continue uploads then opens My Documents
 - Chat: seeded thread rendering; local send; suggestion chips; document checkboxes/select; settings sliders (UI only)
+- Prepare for Interviews: topic list above Settings, practice/mock settings, table/code answers (local send)
 - Marketing illustration image on auth
 - Lucide icons, Inter, Tailwind brand tokens
+- 404 catch-all; maintenance page; `VITE_DOWNTIME` forces all URLs there
+- Shared top toasts (`AppToasts`); red toast on API 5xx
 
 ---
 
@@ -529,11 +574,8 @@ These work in the browser without a backend:
 
 **Upload**
 
-- Files never leave the browser; `File` is not retained after `toUploadedDoc` (only metadata)
-- Paste text content not stored
-- Continue unused
-- View sample / guidelines / privacy links `#`
-- File row always labeled PDF
+- View sample opens a PDF modal; guidelines / privacy links `#`
+- Indexing still needs Groq; failed files show `failed` plus `error_message` tooltip
 
 **Chat**
 
@@ -551,7 +593,7 @@ These work in the browser without a backend:
 
 ## 18. Backend requirements (inferred from UI)
 
-Auth is implemented on the API. Documents/chat UI still implies more than the frontend calls.
+Auth is implemented on the API. Upload and chat UI still imply more than the frontend calls.
 
 ### Auth (implemented)
 
@@ -562,13 +604,12 @@ Auth is implemented on the API. Documents/chat UI still implies more than the fr
 
 - `GET /v1/home` — recent documents, counts, recent conversations (JWT required)
 
-### Documents
+### Documents (list + upload implemented)
 
-- Upload resume (multipart, PDF/DOCX/TXT, 10 MB)
-- Upload one or more job descriptions (same types)
-- Optional paste JD as text
-- List/delete documents; statuses `uploaded` / `processed`
-- IDs the chat picker can consume (today chat uses `resume-1`, `job-1`, …)
+- `GET /v1/documents` — user’s documents newest first (JWT required)
+- `POST /v1/documents` — multipart `file` + `doc_type` (`resume` | `job`); indexing runs in the background
+- `DELETE /v1/documents/{id}` — owner-only; removes row, profiles, chunks, and stored file (204)
+- `WS /v1/ws/documents?token=<jwt>` — `{ type: "document.status", document: DocumentOut }` or `{ type: "document.deleted", document_id }`
 
 ### Chat
 
@@ -588,7 +629,7 @@ Auth is implemented on the API. Documents/chat UI still implies more than the fr
 2. **Dashboard vs auth shells** — auth stays split-screen; product pages use `DashboardLayout` (`h-dvh`, inner scroll, not document scroll).
 3. **Sidebar collapse is global** — `useSidebar` module refs + localStorage keys `ci.leftSidebarCollapsed` / `ci.rightSidebarCollapsed`. Header must **not** grow extra minimize icons; left expand = collapsed **logo** (hover shows expand icon); right minimize = **inside** the right panel; right expand = **rail**.
 4. **`@` alias** for `src/`.
-5. **No Pinia yet** — session lives in `useAuth`; sidebar in `useSidebar`. Adding Pinia is reasonable when upload must feed chat.
+5. **No Pinia yet** — session lives in `useAuth`; sidebar in `useSidebar`; toasts in `useToast`. Adding Pinia is reasonable when upload must feed chat.
 6. **Brand color** `#2563eb` / `text-brand` / `bg-brand`.
 7. **Chat document pickers live in the right panel**, not above the thread (`ChatView` header copy already says this).
 8. **Type-only status literals** (`'uploaded'`, `'processed'`) — extend types when the API is real; don’t silently use strings elsewhere.
@@ -619,12 +660,11 @@ Auth is implemented on the API. Documents/chat UI still implies more than the fr
 
 1. **Unify documents:** one store (or API) so `UploadView` output is `documentLibrary` / chat `resumeId`/`jobIds`. Authenticated `fetch` already attaches the JWT.
 2. **Replace `send()`** with a real client; keep `ChatMessage` shape or version it explicitly.
-3. **Continue** on upload should navigate to `/chat` or an analysis page **after** documents persist.
+3. **Continue** on upload navigates to `/documents` after files persist (not chat).
 4. Add Home / Analysis / etc. only as real views; don’t turn sidebar `div`s into dead `/home` routes that 404.
 5. If you add env, use `VITE_` prefix and extend `vite-env.d.ts`; never commit secrets.
 6. Update this file when routes, APIs, or document flow change.
 
 ### Suggested next backend-facing tasks
 
-- Persist upload `File`s or server IDs via `/v1/documents`
 - Chat `send` → `/v1/chat` (SSE when `stream` is true)

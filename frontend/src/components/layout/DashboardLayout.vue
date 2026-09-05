@@ -7,6 +7,7 @@ import { useSidebar } from '@/composables/useSidebar'
 
 defineProps<{
   showRecentChats?: boolean
+  showInterviewTopics?: boolean
 }>()
 
 const slots = useSlots()
@@ -16,7 +17,12 @@ const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useSidebar()
 
 <template>
   <div class="flex h-dvh overflow-hidden bg-[#f5f7fb]">
-    <AppSidebar :collapsed="leftCollapsed" :show-recent-chats="showRecentChats" @toggle="toggleLeft" />
+    <AppSidebar
+      :collapsed="leftCollapsed"
+      :show-recent-chats="showRecentChats"
+      :show-interview-topics="showInterviewTopics"
+      @toggle="toggleLeft"
+    />
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <AppTopBar />

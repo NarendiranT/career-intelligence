@@ -11,16 +11,20 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+psycopg://career:career@localhost:5432/career_intelligence"
-    openai_api_key: str = ""
-    embedding_model: str = "text-embedding-3-small"
-    chat_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    hf_token: str = ""
+    extraction_model: str = "openai/gpt-oss-20b"
+    router_model: str = "openai/gpt-oss-20b"
+    generation_model: str = "openai/gpt-oss-120b"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_device: str = "cpu"
     data_dir: Path = Path("data")
     jwt_secret: str = "dev-insecure-change-me"
     jwt_alg: str = "HS256"
     jwt_expire_minutes: int = 1440
     jwt_remember_expire_minutes: int = 60 * 24 * 30
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
-    embedding_dim: int = 1536
+    embedding_dim: int = 384
     max_upload_bytes: int = 10 * 1024 * 1024
     max_question_chars: int = 8000
 

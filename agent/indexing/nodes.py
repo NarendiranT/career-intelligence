@@ -77,7 +77,7 @@ def route_document(state: IndexingState) -> dict[str, Any]:
         )
         return {"doc_type": hinted}
 
-    llm = get_chat_model()
+    llm = get_chat_model(role="router")
     structured = llm.with_structured_output(DocumentClassification)
     snippet = (state.get("raw_text") or "")[:4000]
     result: DocumentClassification = structured.invoke(
@@ -107,7 +107,7 @@ def process_resume(state: IndexingState) -> dict[str, Any]:
     if state.get("error"):
         return {}
     user_id, document_id = _ids(state)
-    llm = get_chat_model()
+    llm = get_chat_model(role="extraction")
     structured = llm.with_structured_output(ResumeProfile)
     profile: ResumeProfile = structured.invoke(
         [
@@ -132,7 +132,7 @@ def process_job(state: IndexingState) -> dict[str, Any]:
     if state.get("error"):
         return {}
     user_id, document_id = _ids(state)
-    llm = get_chat_model()
+    llm = get_chat_model(role="extraction")
     structured = llm.with_structured_output(JobProfile)
     profile: JobProfile = structured.invoke(
         [

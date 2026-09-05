@@ -1,0 +1,280 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 4309 >>
+stream
+0.29 0.18 0.62 rg
+0.0 720.0 612.0 72.0 re f
+BT
+/F2 22 Tf
+1 1 1 rg
+1 0 0 1 54.0 758.0 Tm
+(Senior AI Engineer) Tj
+ET
+BT
+/F1 11 Tf
+1 1 1 rg
+1 0 0 1 54.0 736.0 Tm
+(Acme Corp  |  Seattle, WA \(hybrid\)  |  Full-time) Tj
+ET
+BT
+/F1 9 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 54.0 708.0 Tm
+(Posted sample  |  For demonstration in Career Intelligence) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 670.0 Tm
+(ABOUT THE ROLE) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 662.0 m 558 662.0 l S
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 646.0 Tm
+(Acme is hiring a Senior AI Engineer to build products that help people understand how their experience maps to) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 632.0 Tm
+(open roles. You will own retrieval quality, evaluation, and the APIs that power resume and job-description) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 618.0 Tm
+(analysis.) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 586.0 Tm
+(WHAT YOU WILL DO) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 578.0 m 558 578.0 l S
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 562.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 562.0 Tm
+(Design and ship RAG pipelines over resumes, job descriptions, and interview notes.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 548.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 548.0 Tm
+(Improve extraction quality for skills, seniority, and requirements using structured outputs.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 534.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 534.0 Tm
+(Partner with product and design on upload flows, document status, and insight surfaces.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 520.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 520.0 Tm
+(Set evaluation harnesses for faithfulness, latency, and cost of LLM calls.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 506.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 506.0 Tm
+(Mentor engineers and write clear design docs for indexing and chat graphs.) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 474.0 Tm
+(MINIMUM QUALIFICATIONS) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 466.0 m 558 466.0 l S
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 450.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 450.0 Tm
+(5+ years of software engineering, including 2+ years shipping ML or LLM features.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 436.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 436.0 Tm
+(Production experience with Python services \(FastAPI or similar\) and PostgreSQL.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 422.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 422.0 Tm
+(Hands-on work with embeddings, vector search, and prompt evaluation.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 408.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 408.0 Tm
+(Comfortable in a TypeScript frontend \(Vue or React\) when the API contract needs a UI.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 394.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 394.0 Tm
+(Strong written communication and a bias toward measurable quality.) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 362.0 Tm
+(NICE TO HAVE) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 354.0 m 558 354.0 l S
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 338.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 338.0 Tm
+(LangGraph, LangChain, or equivalent agent orchestration.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 324.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 324.0 Tm
+(Document parsing \(PDF/DOCX\) and chunking strategies for long career histories.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 310.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 310.0 Tm
+(Experience with interview-prep or recruiting products.) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 278.0 Tm
+(COMPENSATION) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 270.0 m 558 270.0 l S
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 254.0 Tm
+(Sample range: $180,000 - $230,000 plus equity. Benefits include medical, 401\(k\), and learning stipend.) Tj
+ET
+BT
+/F1 8 Tf
+0.45 0.45 0.45 rg
+1 0 0 1 54.0 230.0 Tm
+(This is a sample job description for Career Intelligence. It is fictional and not a real opening.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000004612 00000 n 
+0000004682 00000 n 
+trailer << /Size 7 /Root 1 0 R >>
+startxref
+4757
+%%EOF

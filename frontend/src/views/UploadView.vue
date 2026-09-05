@@ -1,56 +1,45 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ArrowRight, Briefcase, CircleAlert, FileText } from '@lucide/vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ArrowRight, Briefcase, CircleAlert, FileText, LoaderCircle } from '@lucide/vue'
+import { uploadDocument } from '@/api/documents'
+import { showToast } from '@/composables/useToast'
 import type { UploadedDoc } from '@/types/upload'
 import { toUploadedDoc } from '@/types/upload'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import DropZone from '@/components/upload/DropZone.vue'
+import SampleDocumentModal from '@/components/upload/SampleDocumentModal.vue'
 import UploadedFileRow from '@/components/upload/UploadedFileRow.vue'
 import UploadInfoSidebar from '@/components/upload/UploadInfoSidebar.vue'
 
 type JobTab = 'files' | 'paste'
+type SampleKind = 'resume' | 'job'
 
-const resumeFiles = ref<UploadedDoc[]>([
-  {
-    id: 'resume-1',
-    name: 'software-engineer-resume.pdf',
-    sizeLabel: '245 KB',
-    uploadedLabel: 'Uploaded just now',
-    status: 'uploaded',
-  },
-])
+const SAMPLE_RESUME_PDF = '/samples/sample-resume.pdf'
+const SAMPLE_JOB_PDF = '/samples/sample-job-description.pdf'
 
-const jobFiles = ref<UploadedDoc[]>([
-  {
-    id: 'job-1',
-    name: 'Senior AI Engineer - Acme Corp.pdf',
-    sizeLabel: '312 KB',
-    uploadedLabel: 'Uploaded 2 minutes ago',
-    status: 'uploaded',
-  },
-  {
-    id: 'job-2',
-    name: 'Machine Learning Engineer - TechCo.pdf',
-    sizeLabel: '428 KB',
-    uploadedLabel: 'Uploaded 3 minutes ago',
-    status: 'uploaded',
-  },
-  {
-    id: 'job-3',
-    name: 'GenAI Platform Engineer - InnovateAI.pdf',
-    sizeLabel: '276 KB',
-    uploadedLabel: 'Uploaded 4 minutes ago',
-    status: 'uploaded',
-  },
-])
+const router = useRouter()
+const resumeFiles = ref<UploadedDoc[]>([])
+const jobFiles = ref<UploadedDoc[]>([])
+const sampleKind = ref<SampleKind | null>(null)
+const submitting = ref(false)
+const submitError = ref('')
+
+const sampleOpen = computed(() => sampleKind.value !== null)
+const sampleTitle = computed(() =>
+  sampleKind.value === 'job' ? 'Sample job description' : 'Sample resume',
+)
+const sampleSrc = computed(() =>
+  sampleKind.value === 'job' ? SAMPLE_JOB_PDF : SAMPLE_RESUME_PDF,
+)
 
 const jobTab = ref<JobTab>('files')
 const pastedText = ref('')
+const pendingCount = computed(() => resumeFiles.value.length + jobFiles.value.length)
+const canContinue = computed(() => pendingCount.value > 0 && !submitting.value)
 
-function setResume(files: File[]) {
-  const next = files[0]
-  if (!next) return
-  resumeFiles.value = [toUploadedDoc(next)]
+function addResumes(files: File[]) {
+  resumeFiles.value = [...resumeFiles.value, ...files.map(toUploadedDoc)]
 }
 
 function addJobs(files: File[]) {
@@ -60,18 +49,34 @@ function addJobs(files: File[]) {
 function addPastedJob() {
   const text = pastedText.value.trim()
   if (!text) return
-  const firstLine = text.split('\n')[0]?.slice(0, 48) || 'Pasted job description'
-  jobFiles.value = [
-    ...jobFiles.value,
-    {
-      id: `paste-${Date.now()}`,
-      name: `${firstLine}.txt`,
-      sizeLabel: `${Math.max(1, Math.round(text.length / 1024))} KB`,
-      uploadedLabel: 'Uploaded just now',
-      status: 'uploaded',
-    },
-  ]
+  const firstLine = text.split('\n')[0]?.replace(/[/\\]/g, '-').slice(0, 48) || 'Pasted job description'
+  const file = new File([text], `${firstLine}.txt`, { type: 'text/plain' })
+  jobFiles.value = [...jobFiles.value, toUploadedDoc(file)]
   pastedText.value = ''
+}
+
+async function continueUpload() {
+  if (!canContinue.value) return
+  submitting.value = true
+  submitError.value = ''
+  const jobs = [
+    ...resumeFiles.value.map((doc) => ({ file: doc.file, docType: 'resume' as const })),
+    ...jobFiles.value.map((doc) => ({ file: doc.file, docType: 'job' as const })),
+  ]
+  const results = await Promise.allSettled(
+    jobs.map((job) => uploadDocument(job.file, job.docType)),
+  )
+  const failed = results.filter((result) => result.status === 'rejected').length
+  const uploaded = results.length - failed
+  submitting.value = false
+  if (uploaded === 0) {
+    submitError.value = 'None of the files could be uploaded. Please try again.'
+    return
+  }
+  if (failed > 0) {
+    showToast(`${failed} file${failed === 1 ? '' : 's'} failed to upload.`, 'error')
+  }
+  await router.push('/documents')
 }
 </script>
 
@@ -97,20 +102,25 @@ function addPastedJob() {
                   </span>
                   <h2 class="text-base font-semibold text-slate-900">1. Upload Your Resume</h2>
                 </div>
-                <p class="mt-1 ml-10 text-xs text-slate-400">Supported formats: PDF, DOCX, TXT (Max 10 MB)</p>
+                <p class="mt-1 ml-10 text-xs text-slate-400">Supported formats: PDF, DOCX, TXT (Max 10 MB each)</p>
               </div>
-              <a class="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline" href="#">
+              <button
+                class="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+                type="button"
+                @click="sampleKind = 'resume'"
+              >
                 <FileText class="h-3.5 w-3.5" />
                 View sample
-              </a>
+              </button>
             </div>
 
             <div class="mt-4">
               <DropZone
-                button-label="Choose File"
-                title="Drag and drop your resume here or click to browse files"
-                hint="Supports PDF, DOCX, TXT (Max 10 MB)"
-                @files="setResume"
+                multiple
+                button-label="Choose Files"
+                title="Drag and drop resume files here or click to browse files"
+                hint="Supports PDF, DOCX, TXT (Max 10 MB each)"
+                @files="addResumes"
               />
             </div>
             <ul v-if="resumeFiles.length" class="mt-3 space-y-2">
@@ -136,10 +146,14 @@ function addPastedJob() {
                   You can upload multiple job descriptions or paste the text directly.
                 </p>
               </div>
-              <a class="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline" href="#">
+              <button
+                class="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+                type="button"
+                @click="sampleKind = 'job'"
+              >
                 <FileText class="h-3.5 w-3.5" />
                 View sample
-              </a>
+              </button>
             </div>
 
             <div class="mt-4 flex gap-6 border-b border-slate-200 text-sm font-medium">
@@ -201,13 +215,22 @@ function addPastedJob() {
               <CircleAlert class="h-4 w-4" />
               Need help? Check our document guidelines
             </a>
-            <button
-              class="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark"
-              type="button"
-            >
-              Continue
-              <ArrowRight class="h-4 w-4" />
-            </button>
+            <div class="flex flex-col items-end gap-2">
+              <p v-if="submitError" class="text-sm text-red-600">{{ submitError }}</p>
+              <button
+                class="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                :disabled="!canContinue"
+                @click="continueUpload"
+              >
+                <LoaderCircle v-if="submitting" class="h-4 w-4 animate-spin" />
+                <template v-if="submitting">Uploading {{ pendingCount }} file{{ pendingCount === 1 ? '' : 's' }}…</template>
+                <template v-else>
+                  Continue
+                  <ArrowRight class="h-4 w-4" />
+                </template>
+              </button>
+            </div>
           </footer>
         </main>
     </div>
@@ -216,4 +239,11 @@ function addPastedJob() {
       <UploadInfoSidebar />
     </template>
   </DashboardLayout>
+
+  <SampleDocumentModal
+    :open="sampleOpen"
+    :title="sampleTitle"
+    :src="sampleSrc"
+    @close="sampleKind = null"
+  />
 </template>

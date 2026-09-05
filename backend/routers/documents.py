@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlmodel import Session, select
 
 from agent.indexing.graph import indexing_graph
@@ -15,6 +15,7 @@ from backend.db import get_db
 from backend.deps import get_user_id
 from backend.errors import MissingLLMConfigError
 from backend.models import Document, DocumentStatus, DocType
+from backend.realtime import publish_document_deleted, publish_document_status
 from backend.serializers import document_to_out
 from mcp.registry import tools
 
@@ -87,8 +88,10 @@ async def upload_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    out = document_to_out(doc)
+    publish_document_status(user_id, out.model_dump(mode="json"))
     background.add_task(_run_indexing, user_id, document_id)
-    return document_to_out(doc)
+    return out
 
 
 @router.get("", response_model=list[DocumentOut])
@@ -100,3 +103,30 @@ def list_documents(
         select(Document).where(Document.user_id == user_id).order_by(Document.created_at.desc())
     ).all()
     return [document_to_out(row) for row in rows]
+
+
+def _unlink_storage(storage_path: str) -> None:
+    path = Path(storage_path)
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not remove stored file %s", path, exc_info=True)
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_document(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_user_id),
+) -> Response:
+    doc = db.exec(
+        select(Document).where(Document.id == document_id, Document.user_id == user_id)
+    ).first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    storage_path = doc.storage_path
+    db.delete(doc)
+    db.commit()
+    _unlink_storage(storage_path)
+    publish_document_deleted(user_id, document_id)
+    return Response(status_code=204)

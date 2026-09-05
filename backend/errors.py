@@ -1,2 +1,2 @@
 class MissingLLMConfigError(RuntimeError):
-    """Raised when OPENAI_API_KEY is not configured."""
+    """Raised when a required LLM API key is not configured."""

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { readToken } from '@/api/token'
 import { bootstrapAuth, safeNextPath, useAuth } from '@/composables/useAuth'
+import { isDowntime } from '@/config/env'
 import SignupView from '@/views/SignupView.vue'
 import SigninView from '@/views/SigninView.vue'
 import HomeView from '@/views/HomeView.vue'
@@ -8,6 +9,9 @@ import UploadView from '@/views/UploadView.vue'
 import DocumentsView from '@/views/DocumentsView.vue'
 import AnalysisView from '@/views/AnalysisView.vue'
 import ChatView from '@/views/ChatView.vue'
+import InterviewView from '@/views/InterviewView.vue'
+import MaintenanceView from '@/views/MaintenanceView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -28,6 +32,9 @@ const router = createRouter({
     { path: '/documents', name: 'documents', component: DocumentsView, meta: { title: 'My Documents', requiresAuth: true } },
     { path: '/analysis', name: 'analysis', component: AnalysisView, meta: { title: 'Analysis & Insights', requiresAuth: true } },
     { path: '/chat', name: 'chat', component: ChatView, meta: { title: 'Chat with Assistant', requiresAuth: true } },
+    { path: '/interview', name: 'interview', component: InterviewView, meta: { title: 'Prepare for Interviews', requiresAuth: true } },
+    { path: '/maintenance', name: 'maintenance', component: MaintenanceView, meta: { title: 'Down for Maintenance' } },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { title: 'Page Not Found' } },
   ],
   scrollBehavior() {
     return { top: 0 }
@@ -35,6 +42,13 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  if (isDowntime()) {
+    if (to.name !== 'maintenance') {
+      return { name: 'maintenance' }
+    }
+    return true
+  }
+
   void bootstrapAuth()
   const { isAuthenticated } = useAuth()
   const hasSession = Boolean(readToken()) || isAuthenticated.value

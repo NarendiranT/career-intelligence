@@ -1,3 +1,4 @@
+import { showToast } from '@/composables/useToast'
 import { clearToken, readToken } from './token'
 
 export class ApiError extends Error {
@@ -43,9 +44,10 @@ function parseDetail(body: unknown): string {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit & { json?: Json; skipAuth?: boolean } = {},
+  options: RequestInit & { json?: Json; skipAuth?: boolean; timeoutMs?: number } = {},
 ): Promise<T> {
-  const { json, skipAuth, headers: initHeaders, ...init } = options
+  const { json, skipAuth, headers: initHeaders, timeoutMs = 15_000, signal: initSignal, ...init } =
+    options
   const headers = new Headers(initHeaders)
   if (json !== undefined) {
     headers.set('Content-Type', 'application/json')
@@ -59,7 +61,7 @@ export async function apiFetch<T>(
     ...init,
     headers,
     body: json !== undefined ? JSON.stringify(json) : init.body,
-    signal: init.signal ?? AbortSignal.timeout(15_000),
+    signal: initSignal ?? (timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined),
   })
 
   if (response.status === 204) {
@@ -81,7 +83,15 @@ export async function apiFetch<T>(
       clearToken()
       onUnauthorized?.()
     }
-    throw new ApiError(parseDetail(body), response.status)
+    const detail = parseDetail(body)
+    if (response.status >= 500) {
+      const message =
+        detail === 'Request failed'
+          ? 'Something went wrong on our side. Please try again.'
+          : detail
+      showToast(message, 'error')
+    }
+    throw new ApiError(detail, response.status)
   }
 
   return body as T

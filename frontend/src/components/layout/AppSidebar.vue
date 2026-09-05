@@ -2,24 +2,28 @@
 import { useRoute } from 'vue-router'
 import {
   BarChart3,
-  Bookmark,
   Briefcase,
   CircleHelp,
   FileText,
   Home,
   MessageSquare,
+  Mic,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Search,
   Settings,
   Sparkles,
   Upload,
 } from '@lucide/vue'
+import { useInterview } from '@/composables/useInterview'
 
 const route = useRoute()
+const { filteredTopics, selectedTopicId, topicQuery, selectTopic } = useInterview()
 
 defineProps<{
   showRecentChats?: boolean
+  showInterviewTopics?: boolean
   collapsed?: boolean
 }>()
 
@@ -33,7 +37,7 @@ const nav = [
   { label: 'My Documents', icon: FileText, to: '/documents', badge: null },
   { label: 'Analysis & Insights', icon: BarChart3, to: '/analysis', badge: 'Soon' },
   { label: 'Chat with Assistant', icon: MessageSquare, to: '/chat', badge: null },
-  { label: 'Saved Results', icon: Bookmark, to: null, badge: null },
+  { label: 'Prepare for Interviews', icon: Mic, to: '/interview', badge: null },
 ] as const
 
 const recentChats = [
@@ -116,7 +120,37 @@ function isActive(to: string | null) {
       </component>
     </nav>
 
-    <div v-if="showRecentChats && !collapsed" class="mt-5 min-h-0 flex-1 overflow-y-auto px-3">
+    <div v-if="showInterviewTopics && !collapsed" class="mt-4 flex min-h-0 flex-1 flex-col px-3">
+      <p class="px-1 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Interview Topics</p>
+      <label class="relative mt-2">
+        <Search class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+        <input
+          v-model="topicQuery"
+          class="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pr-2 pl-8 text-[12px] outline-none placeholder:text-slate-400 focus:border-brand focus:bg-white"
+          type="search"
+          placeholder="Search topics..."
+        />
+      </label>
+      <div class="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+        <button
+          v-for="topic in filteredTopics"
+          :key="topic.id"
+          class="w-full rounded-lg px-3 py-2 text-left text-[13px]"
+          :class="
+            topic.id === selectedTopicId
+              ? 'bg-blue-50 font-semibold text-brand'
+              : 'font-medium text-slate-600 hover:bg-slate-50'
+          "
+          type="button"
+          @click="selectTopic(topic.id)"
+        >
+          {{ topic.label }}
+        </button>
+        <p v-if="!filteredTopics.length" class="px-2 py-3 text-[12px] text-slate-400">No topics match.</p>
+      </div>
+    </div>
+
+    <div v-else-if="showRecentChats && !collapsed" class="mt-5 min-h-0 flex-1 overflow-y-auto px-3">
       <div class="mb-2 flex items-center justify-between px-1">
         <p class="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Recent Chats</p>
         <button class="inline-flex items-center gap-1 text-[11px] font-semibold text-brand" type="button">

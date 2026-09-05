@@ -1,0 +1,236 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 3638 >>
+stream
+0.15 0.39 0.92 rg
+0.0 720.0 612.0 72.0 re f
+BT
+/F2 22 Tf
+1 1 1 rg
+1 0 0 1 54.0 758.0 Tm
+(Alex Rivera) Tj
+ET
+BT
+/F1 11 Tf
+1 1 1 rg
+1 0 0 1 54.0 736.0 Tm
+(Senior Software Engineer  |  Python, TypeScript, Applied AI) Tj
+ET
+BT
+/F1 9 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 54.0 708.0 Tm
+(seattle@example.com  |  \(206\) 555-0142  |  Seattle, WA  |  linkedin.com/in/alexrivera) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 670.0 Tm
+(PROFESSIONAL SUMMARY) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 662.0 m 558 662.0 l S
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 646.0 Tm
+(Software engineer with 8 years building backend services and applied AI features. Comfortable shipping) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 632.0 Tm
+(production APIs, retrieval pipelines, and interview-prep products used by hiring teams. Looking for a senior role) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 618.0 Tm
+(that mixes systems work with LLM applications.) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 586.0 Tm
+(EXPERIENCE) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 578.0 m 558 578.0 l S
+BT
+/F2 11 Tf
+0.12 0.12 0.12 rg
+1 0 0 1 54.0 562.0 Tm
+(Staff Software Engineer - Northwind Labs) Tj
+ET
+BT
+/F1 9 Tf
+0.4 0.4 0.4 rg
+1 0 0 1 400.0 562.0 Tm
+(2022 - Present) Tj
+ET
+BT
+/F1 9 Tf
+0.4 0.4 0.4 rg
+1 0 0 1 54.0 548.0 Tm
+(Seattle, WA | Career intelligence and recruiting tools) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 536.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 536.0 Tm
+(Led a document-indexing service that parses resumes and job descriptions into structured skill graphs.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 522.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 522.0 Tm
+(Designed RAG search over pgvector so recruiters can ask grounded questions about a candidate packet.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 508.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 508.0 Tm
+(Cut p95 parse latency from 9.4s to 2.1s by batching embeddings and streaming PDF text extraction.) Tj
+ET
+BT
+/F2 11 Tf
+0.12 0.12 0.12 rg
+1 0 0 1 54.0 488.0 Tm
+(Senior Software Engineer - Cascade Analytics) Tj
+ET
+BT
+/F1 9 Tf
+0.4 0.4 0.4 rg
+1 0 0 1 400.0 488.0 Tm
+(2018 - 2022) Tj
+ET
+BT
+/F1 9 Tf
+0.4 0.4 0.4 rg
+1 0 0 1 54.0 474.0 Tm
+(Remote | Data platform for B2B SaaS) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 462.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 462.0 Tm
+(Owned Python FastAPI services and Vue dashboards used by 40+ enterprise customers.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 448.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 448.0 Tm
+(Introduced background jobs for report generation and reduced failed uploads by 38%.) Tj
+ET
+BT
+/F1 10 Tf
+0.35 0.35 0.35 rg
+1 0 0 1 62.0 434.0 Tm
+(-) Tj
+ET
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 76.0 434.0 Tm
+(Mentored four engineers; established code-review and on-call practices.) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 402.0 Tm
+(EDUCATION) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 394.0 m 558 394.0 l S
+BT
+/F2 11 Tf
+0.12 0.12 0.12 rg
+1 0 0 1 54.0 378.0 Tm
+(B.S. Computer Science - University of Washington) Tj
+ET
+BT
+/F1 9 Tf
+0.4 0.4 0.4 rg
+1 0 0 1 430.0 378.0 Tm
+(2014 - 2018) Tj
+ET
+BT
+/F2 11 Tf
+0.18 0.18 0.18 rg
+1 0 0 1 54.0 338.0 Tm
+(SKILLS) Tj
+ET
+0.75 0.80 0.86 RG 1.2 w
+54 330.0 m 558 330.0 l S
+BT
+/F1 10 Tf
+0.22 0.22 0.22 rg
+1 0 0 1 54.0 314.0 Tm
+(Python, TypeScript, Vue, FastAPI, PostgreSQL, pgvector, LangGraph, Docker, AWS, pytest, Git.) Tj
+ET
+BT
+/F1 8 Tf
+0.45 0.45 0.45 rg
+1 0 0 1 54.0 292.0 Tm
+(This is a sample resume for Career Intelligence. It is fictional and for layout demonstration only.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000003941 00000 n 
+0000004011 00000 n 
+trailer << /Size 7 /Root 1 0 R >>
+startxref
+4086
+%%EOF

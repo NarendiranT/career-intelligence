@@ -11,6 +11,8 @@ from backend.db import session_scope
 from backend.models import Chunk, Document, DocumentStatus, DocType, JobProfile as JobProfileRow
 from backend.models import ResumeProfile as ResumeProfileRow
 from backend.models import User
+from backend.realtime import publish_document_status
+from backend.serializers import document_to_out
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +103,10 @@ def update_processing_status(
         doc.error_message = error_message
         if doc_type is not None:
             doc.doc_type = DocType(doc_type)
-        return {"id": str(doc.id), "status": doc.status.value}
+        payload = document_to_out(doc).model_dump(mode="json")
+        result = {"id": str(doc.id), "status": doc.status.value}
+    publish_document_status(user_id, payload)
+    return result
 
 
 def replace_document_chunks(

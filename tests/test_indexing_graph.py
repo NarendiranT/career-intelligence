@@ -5,6 +5,7 @@ from pathlib import Path
 
 from agent.indexing.graph import indexing_graph
 from agent.schemas import ResumeProfile
+from backend.config import settings
 from backend.models import Document, DocumentStatus, DocType
 from backend.db import session_scope
 from mcp.registry import tools
@@ -29,10 +30,10 @@ class _FakeChat:
 
 class _FakeEmbeddings:
     def embed_documents(self, texts):
-        return [[0.01] * 1536 for _ in texts]
+        return [[0.01] * settings.embedding_dim for _ in texts]
 
     def embed_query(self, _text):
-        return [0.01] * 1536
+        return [0.01] * settings.embedding_dim
 
 
 @requires_postgres

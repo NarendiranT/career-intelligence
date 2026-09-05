@@ -31,7 +31,7 @@ def test_chat_rejects_empty_question():
 
 def test_openapi_includes_agent_routes():
     paths = client.app.openapi()["paths"]
-    assert "/v1/documents" in paths
+    assert "/v1/documents/{document_id}" in paths
     assert "/v1/chat" in paths
     assert "/v1/auth/register" in paths
     assert "/v1/auth/login" in paths

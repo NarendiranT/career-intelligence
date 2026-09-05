@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UploadedDoc } from '@/types/upload'
+import { fileBadge } from '@/types/upload'
 import { FileText, X } from '@lucide/vue'
 
 defineProps<{
@@ -16,7 +17,7 @@ defineEmits<{
     <span class="flex h-10 w-8 shrink-0 items-center justify-center rounded-md bg-red-50 text-[9px] font-extrabold tracking-wide text-red-500">
       <span class="flex flex-col items-center">
         <FileText class="h-4 w-4" />
-        PDF
+        {{ fileBadge(file.name) }}
       </span>
     </span>
     <div class="min-w-0 flex-1">

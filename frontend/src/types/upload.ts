@@ -3,7 +3,8 @@ export type UploadedDoc = {
   name: string
   sizeLabel: string
   uploadedLabel: string
-  status: 'uploaded'
+  status: 'ready'
+  file: File
 }
 
 export function formatBytes(bytes: number): string {
@@ -22,12 +23,22 @@ export function isAcceptedFile(file: File): boolean {
   return ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext)) && file.size <= MAX_FILE_BYTES
 }
 
+export function fileBadge(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.pdf')) return 'PDF'
+  if (lower.endsWith('.docx')) return 'DOCX'
+  if (lower.endsWith('.doc')) return 'DOC'
+  if (lower.endsWith('.txt')) return 'TXT'
+  return 'FILE'
+}
+
 export function toUploadedDoc(file: File): UploadedDoc {
   return {
     id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name,
     sizeLabel: formatBytes(file.size),
-    uploadedLabel: 'Uploaded just now',
-    status: 'uploaded',
+    uploadedLabel: 'Ready to upload',
+    status: 'ready',
+    file,
   }
 }

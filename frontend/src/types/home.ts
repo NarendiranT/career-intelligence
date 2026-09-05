@@ -1,15 +1,8 @@
-export type DocumentStatus = 'uploaded' | 'processing' | 'processed' | 'failed'
+import type { ApiDocument } from './document'
 
-export type HomeDocument = {
-  id: string
-  filename: string
-  doc_type: 'resume' | 'job' | null
-  status: DocumentStatus
-  mime: string | null
-  size: number | null
-  error_message: string | null
-  created_at: string | null
-}
+export type { DocumentStatus } from './document'
+
+export type HomeDocument = ApiDocument
 
 export type HomeConversation = {
   id: string
