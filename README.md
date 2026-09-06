@@ -86,7 +86,7 @@ To export traces and metrics from the API, set `OTEL_ENABLED=true` (endpoint def
 
 Register or login (`POST /v1/auth/register` or `/v1/auth/login`) and send `Authorization: Bearer <token>` on `/v1/documents` and `/v1/chat`. In local dev the Vue app should leave `VITE_API_BASE_URL` empty so Vite proxies `/v1` to this API (see `frontend/.env.example`).
 
-See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples. Frontend agent notes: [docs/FRONTEND_CONTEXT.md](docs/FRONTEND_CONTEXT.md). Architecture Word document: [docs/Career_Intelligence_Architecture_and_System_Design.docx](docs/Career_Intelligence_Architecture_and_System_Design.docx).
+See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples. Frontend agent notes: [docs/FRONTEND_CONTEXT.md](docs/FRONTEND_CONTEXT.md). Architecture Word document: [docs/Career_Intelligence_Architecture_and_System_Design.docx](docs/Career_Intelligence_Architecture_and_System_Design.docx). UI page screenshots: [docs/Career_Intelligence_UI_Screens.pdf](docs/Career_Intelligence_UI_Screens.pdf).
 
 ## Status
 
