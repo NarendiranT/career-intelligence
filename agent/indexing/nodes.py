@@ -11,7 +11,7 @@ from agent.context_budget import EXTRACT_DOCUMENT_CHARS, truncate_text
 from agent.indexing.loaders import extract_text
 from agent.llm import get_chat_model, get_embeddings, invoke_structured_tracked
 from agent.schemas import DocumentClassification, JobProfile, ResumeProfile
-from agent.usage import append_usage, persist_usage_events
+from agent.usage import append_usage, document_usage_details, persist_usage_events
 from backend.db import session_scope
 from backend.models import Document, DocumentStatus
 from mcp.registry import tools
@@ -216,6 +216,12 @@ def persist_data(state: IndexingState) -> dict[str, Any]:
     persist_usage_events(
         user_id=user_id,
         events=state.get("usage_events") or [],
-        extra={"document_id": str(document_id)},
+        extra={
+            "document_id": str(document_id),
+            "filename": state.get("filename"),
+            "doc_type": state.get("doc_type"),
+            "feature": "documents",
+            "details": document_usage_details(state.get("doc_type"), state.get("filename")),
+        },
     )
     return {}

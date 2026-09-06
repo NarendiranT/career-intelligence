@@ -64,7 +64,7 @@ Each upload inserts a `documents` row, then runs `indexing_graph` in a FastAPI b
 
 The graph starts at `identify_channel`. `channel=extract_topics` runs `extract_interview_topics` and exits. `channel=interview` loads the topic, then follows retrieve → generate → persist (no faithfulness). `channel=assistant` is the original path.
 
-Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner totals: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent **assistant** threads) and `GET /v1/conversations/<id>` (messages). Interview topics: `GET /v1/topics` (`question_count` = user messages in that topic’s interview conversation).
+Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner usage dashboard: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent **assistant** threads) and `GET /v1/conversations/<id>` (messages). Interview topics: `GET /v1/topics` (`question_count` = user messages in that topic’s interview conversation).
 
 ```bash
 curl -s -X POST http://localhost:8000/v1/chat \
@@ -82,10 +82,12 @@ WebSocket chat (`WS /v1/ws/chat?token=<jwt>`): send `{ "type": "chat.ask", "ques
 - `extract_topics`: pass the assistant answer as `question`, plus `source_conversation_id` / `source_message_id`. Creates `topics` rows and interview conversations. `chat.done` includes `topics: [{ id, label, conversation_id }]`.
 - `interview`: pass `topic_id` and the interview Chat Settings as `system_prompt`. Skips faithfulness retry. `chat.done` may include `table` and `code`.
 
-Token tracking: each Groq structured call records prompt/completion tokens, model, and latency on `usage_events` (`indexing.route`, `indexing.extract_resume`, `indexing.extract_job`, `rag.query_understanding`, `rag.generate`, `rag.faithfulness`, `rag.extract_topics`). Indexing rows store `document_id` in `extra`.
+Token tracking: each Groq structured call records prompt/completion tokens, model, and latency on `usage_events` (`indexing.route`, `indexing.extract_resume`, `indexing.extract_job`, `rag.query_understanding`, `rag.generate`, `rag.faithfulness`, `rag.extract_topics`). Each persist batch shares an `activity_id` and snapshots `feature` (`chat` | `interview` | `documents`) plus `details` (question text or `Processed resume (file.pdf)`) into `extra` so deleting a conversation or document does not change usage. Indexing also stores `document_id` / `filename` in `extra`.
+
+Owner dashboard: `GET /v1/usage?range=30d` (`7d` | `30d` | `90d`). Response includes lifetime `total_tokens` / `by_event_type`, plus range `features`, `daily`, up to **5** `recent` activities, and `delta_percent` vs the previous window of the same length. Full activity table: `GET /v1/usage/activities?start=YYYY-MM-DD&end=YYYY-MM-DD`.
 
 ```bash
-curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/usage
+curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8000/v1/usage?range=30d"
 ```
 
 Auth:

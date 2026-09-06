@@ -7,7 +7,7 @@ import SigninView from '@/views/SigninView.vue'
 import HomeView from '@/views/HomeView.vue'
 import UploadView from '@/views/UploadView.vue'
 import DocumentsView from '@/views/DocumentsView.vue'
-import AnalysisView from '@/views/AnalysisView.vue'
+import UsageView from '@/views/UsageView.vue'
 import ChatView from '@/views/ChatView.vue'
 import InterviewView from '@/views/InterviewView.vue'
 import MaintenanceView from '@/views/MaintenanceView.vue'
@@ -30,7 +30,8 @@ const router = createRouter({
     { path: '/home', name: 'home', component: HomeView, meta: { title: 'Home', requiresAuth: true } },
     { path: '/upload', name: 'upload', component: UploadView, meta: { title: 'Upload Documents', requiresAuth: true } },
     { path: '/documents', name: 'documents', component: DocumentsView, meta: { title: 'My Documents', requiresAuth: true } },
-    { path: '/analysis', name: 'analysis', component: AnalysisView, meta: { title: 'Analysis & Insights', requiresAuth: true } },
+    { path: '/usage', name: 'usage', component: UsageView, meta: { title: 'Usage', requiresAuth: true } },
+    { path: '/analysis', redirect: '/usage' },
     { path: '/chat', name: 'chat', component: ChatView, meta: { title: 'Chat with Assistant', requiresAuth: true } },
     { path: '/interview', name: 'interview', component: InterviewView, meta: { title: 'Prepare for Interviews', requiresAuth: true } },
     { path: '/maintenance', name: 'maintenance', component: MaintenanceView, meta: { title: 'Down for Maintenance' } },

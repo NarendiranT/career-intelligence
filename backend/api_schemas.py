@@ -95,12 +95,49 @@ class UsageByEventOut(BaseModel):
     count: int
 
 
+class UsageFeatureOut(BaseModel):
+    id: str
+    label: str
+    tokens: int
+    percent: int
+    activity_count: int
+
+
+class UsageDailyOut(BaseModel):
+    date: str
+    chat: int
+    interview: int
+    documents: int
+
+
+class UsageActivityOut(BaseModel):
+    id: str
+    created_at: datetime
+    feature: str
+    tokens: int
+    details: str
+
+
+class UsageActivitiesOut(BaseModel):
+    start: str
+    end: str
+    activities: list[UsageActivityOut] = Field(default_factory=list)
+
+
 class UsageSummaryOut(BaseModel):
+    range: str = "30d"
+    days: int = 30
     total_tokens: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
     event_count: int = 0
+    range_tokens: int = 0
+    previous_range_tokens: int = 0
+    delta_percent: int = 0
     by_event_type: list[UsageByEventOut] = Field(default_factory=list)
+    features: list[UsageFeatureOut] = Field(default_factory=list)
+    daily: list[UsageDailyOut] = Field(default_factory=list)
+    recent: list[UsageActivityOut] = Field(default_factory=list)
 
 
 class HomeStatsOut(BaseModel):

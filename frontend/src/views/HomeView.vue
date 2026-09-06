@@ -151,17 +151,15 @@ onMounted(() => {
         </RouterLink>
 
         <RouterLink
-          to="/analysis"
+          to="/usage"
           class="group rounded-2xl border border-violet-100 bg-[#f4f0ff] p-5 transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
             <BarChart3 class="h-5 w-5" />
           </span>
-          <p class="mt-4 text-[15px] font-bold text-slate-800">Analysis & Insights</p>
-          <p class="mt-1 text-[13px] leading-relaxed text-slate-500">See skill gaps and match scores</p>
-          <span class="mt-3 inline-block rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-600">
-            Coming soon
-          </span>
+          <p class="mt-4 text-[15px] font-bold text-slate-800">Usage</p>
+          <p class="mt-1 text-[13px] leading-relaxed text-slate-500">Track tokens and activity across features</p>
+          <ArrowRight class="mt-4 h-4 w-4 text-violet-600 transition group-hover:translate-x-0.5" />
         </RouterLink>
 
         <RouterLink

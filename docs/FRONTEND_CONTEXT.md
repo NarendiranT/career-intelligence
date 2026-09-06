@@ -27,7 +27,7 @@ Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Document
 | Home dashboard | Yes (`GET /v1/home`) |
 | Upload documents | Yes (`POST /v1/documents` per file; Continue then `/documents`) |
 | My Documents | Yes (`GET /v1/documents` + `WS /v1/ws/documents`) |
-| Analysis & Insights | No (coming-soon page only) |
+| Usage | Yes (`GET /v1/usage`) |
 | Chat with assistant | Yes (`GET /v1/documents` + `WS /v1/ws/chat`; token usage on `chat.done`) |
 | Prepare for Interviews | Yes (`GET /v1/topics` + `WS /v1/ws/chat` with `channel=interview` / `extract_topics`) |
 
@@ -40,7 +40,7 @@ There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api
 3. **Home** (`/home`): dashboard chrome (requires auth). Hero, quick actions, and live recent documents / stats / conversations from `GET /v1/home`.
 4. **Upload** (`/upload`): dashboard chrome. Empty resume/JD lists until the user adds files (multiple of each). **View sample** opens a PDF modal. **Continue** uploads every pending file then goes to `/documents`.
 5. **My Documents** (`/documents`): two tabs (resumes / job descriptions), search, 10-per-page pagination. Loaded from `GET /v1/documents`; status badges update over the document WebSocket.
-6. **Analysis** (`/analysis`): coming-soon placeholder.
+6. **Usage** (`/usage`): token dashboard from `GET /v1/usage` (range 7/30/90 days). Recent Usage shows the latest 5 rows; **View all** opens a date-filtered table with CSV export from `GET /v1/usage/activities`. `/analysis` redirects here.
 7. **Chat** (`/chat`): dashboard chrome. Empty thread until the user asks. Resume/JD picks load from `GET /v1/documents` (processed files only). Asking sends `chat.ask` on `WS /v1/ws/chat` with chat settings; the assistant reply streams as `chat.token` frames then `chat.done` (including token usage).
 8. **Prepare for Interviews** (`/interview`): dashboard chrome with Interview Topics in the left nav (above Settings). Topics come from `GET /v1/topics` (created from a chat reply). Topic chat streams on `WS /v1/ws/chat` with `channel=interview`.
 
@@ -58,6 +58,7 @@ Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 | Routing | `vue-router` 4, `createWebHistory()` |
 | CSS | Tailwind CSS **v4** via `@import "tailwindcss"` and `@tailwindcss/vite` |
 | Icons | `@lucide/vue` |
+| Charts | `chart.js` on the Usage page |
 | Font | Inter from Google Fonts in `frontend/index.html` |
 | State | Component `ref` / `computed` / `defineModel`; module composables `useSidebar`, `useAuth`, `useToast` |
 | API client | `frontend/src/api/client.ts` (`fetch` + Bearer token) |
@@ -100,7 +101,7 @@ career-intelligence/
         ├── style.css
         ├── vite-env.d.ts
         ├── router/index.ts
-        ├── api/client.ts, token.ts, auth.ts, home.ts, documents.ts, conversations.ts
+        ├── api/client.ts, token.ts, auth.ts, home.ts, documents.ts, conversations.ts, usage.ts
         ├── composables/useSidebar.ts, useAuth.ts, useToast.ts, useInterview.ts, useDocumentRealtime.ts
         ├── types/upload.ts, chat.ts, auth.ts
         ├── views/
@@ -109,6 +110,7 @@ career-intelligence/
         │   ├── signup/
         │   ├── signin/
         │   ├── upload/
+        │   ├── usage/
         │   ├── chat/
         │   └── interview/
 ```
@@ -122,7 +124,7 @@ career-intelligence/
 | `frontend/src/components/upload/` | Upload dropzones, file rows, sample PDF modal, tips column |
 | `frontend/src/components/chat/` | Messages, composer, right context/settings panel |
 | `frontend/src/components/interview/` | Interview messages, composer, right settings panel |
-| `frontend/src/types/` | Auth, home, documents, upload, chat, and interview TypeScript types |
+| `frontend/src/types/` | Auth, home, documents, upload, chat, interview, and usage TypeScript types |
 | `frontend/src/composables/` | `useSidebar`, `useAuth`, `useToast`, `useInterview`, `useDocumentRealtime`, `useChatRealtime` |
 | `frontend/public/` | Static assets: `/favicon.svg`, `/samples/*.pdf` |
 
@@ -134,7 +136,7 @@ career-intelligence/
 
 Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to `Career Intelligence — ${meta.title}`.
 
-`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`. Protected: `/home`, `/upload`, `/documents`, `/analysis`, `/chat`, `/interview`. Session presence is the `ci.accessToken` localStorage key. Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
+`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`. Protected: `/home`, `/upload`, `/documents`, `/usage`, `/chat`, `/interview`. `/analysis` redirects to `/usage`. Session presence is the `ci.accessToken` localStorage key. Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
 
 ### `/` — `signup` — `frontend/src/views/SignupView.vue`
 
@@ -150,7 +152,7 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 ### `/home` — `home` — `frontend/src/views/HomeView.vue`
 
 - Wrapped in `DashboardLayout` with **no** right slot.
-- Hero CTAs and quick-action cards link to `/upload`, `/chat`, and `/analysis`. Analysis is labeled coming soon.
+- Hero CTAs and quick-action cards link to `/upload`, `/chat`, `/usage`, and `/interview`.
 - Recent documents, glance stats, and conversations come from `GET /v1/home`. Documents “View all” goes to `/documents`.
 - **Status:** Wired to the home summary API (empty states when the user has no data).
 
@@ -171,10 +173,14 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 - Documents come from `GET /v1/documents` (`frontend/src/api/documents.ts`). Live patches come from `useDocumentRealtime` (`WS /v1/ws/documents?token=`). Untyped rows (`doc_type` null) appear under resumes.
 - **Status:** Wired to the documents list API and status WebSocket.
 
-### `/analysis` — `analysis` — `frontend/src/views/AnalysisView.vue`
+### `/usage` — `usage` — `frontend/src/views/UsageView.vue`
 
-- Coming-soon placeholder. Sidebar shows a **Soon** badge.
-- **Status:** No analysis UI yet.
+- `DashboardLayout` with **no** right slot. Scrolls in `#usage-scroll`.
+- Summary cards, daily line chart, donut, activity bars, and a 5-row recent table from `GET /v1/usage?range=`.
+- **View all** opens `UsageActivitiesModal` with from/to dates and **Export usage** (CSV) via `GET /v1/usage/activities`.
+- Range select: last 7 / 30 / 90 days. Charts use `chart.js`.
+- `/analysis` redirects here.
+- **Status:** Wired to the usage API. Deleting chats or documents does not change these rows.
 
 ### `/chat` — `chat` — `frontend/src/views/ChatView.vue`
 
@@ -203,7 +209,7 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 
 ### Sidebar labels that are **not** routes
 
-In `AppSidebar.vue`, Settings and Help & Support are labels only (`<div>`). Home, Upload, My Documents, Analysis, Chat, and Prepare for Interviews are real routes.
+In `AppSidebar.vue`, Settings and Help & Support are labels only (`<div>`). Home, Upload, My Documents, Usage, Chat, and Prepare for Interviews are real routes.
 
 ---
 
@@ -242,6 +248,10 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`SocialButton.vue`** — Props: `provider: 'google' | 'microsoft'`, `label`, `disabled?`. No OAuth handler.
 
+### Usage
+
+**`UsageActivitiesModal.vue`** — Props: `open`, `start`, `end`, `featureMeta`, `featureIcons`, `formatDateTime`, `formatTokens`. Emits `close`, `update:start`, `update:end`. Loads `GET /v1/usage/activities?start=&end=` and exports the visible rows as CSV.
+
 ### Upload
 
 **`DropZone.vue`** — Props: `multiple?`, `buttonLabel`, `title`, `hint`. Emit: `files: File[]`. Accept: `.pdf,.doc,.docx,.txt`. Max 10 MB (`MAX_FILE_BYTES` in `types/upload.ts`). Rejected files are dropped silently (no error UI).
@@ -276,7 +286,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 - `lg:grid-cols-2`: left marketing (`hidden` until `lg`), right form.
 - **Not** using `DashboardLayout`. Window scroll is allowed.
 
-### Dashboard (`HomeView`, `UploadView`, `DocumentsView`, `AnalysisView`, `ChatView`, `InterviewView`)
+### Dashboard (`HomeView`, `UploadView`, `DocumentsView`, `UsageView`, `ChatView`, `InterviewView`)
 
 ```text
 ┌────────────┬──────────────────────────────────────────┐
@@ -288,7 +298,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 └────────────┴─────────────────────────────┴────────────┘
 ```
 
-- **Header:** `AppTopBar` (notifications + current user + logout). No sidebar toggles in the header. Home, documents, and analysis have no right column.
+- **Header:** `AppTopBar` (notifications + current user + logout). No sidebar toggles in the header. Home, documents, and usage have no right column.
 - **Left sidebar:** always present on dashboard pages. Collapse persisted (`ci.leftSidebarCollapsed`).
 - **Right sidebar:** present when `#right` is provided (both upload and chat). Collapse persisted (`ci.rightSidebarCollapsed`). Minimize control is **inside** the right column; expand is the thin rail icon.
 - **Main:** `overflow-hidden` on the slot wrapper. Upload uses `#upload-scroll` (`overflow-y-auto`). Chat uses `#chat-scroll` for the thread; composer stays at the bottom (`shrink-0`).
@@ -316,7 +326,7 @@ JWT Bearer tokens from FastAPI. Token key: `ci.accessToken`. Session state: `use
 
 Auth, home, upload, documents list, and chat. Base URL: `VITE_API_BASE_URL` (`frontend/.env.example`; empty = same-origin Vite proxy to port 8000, including WebSockets). Chat asks go over `WS /v1/ws/chat?token=<jwt>`.
 
-Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Chat threads call `GET /v1/conversations` and `GET /v1/conversations/{id}` via `frontend/src/api/conversations.ts`. Upload calls `POST /v1/documents` (multipart `file` + `doc_type`) via `uploadDocument` in `frontend/src/api/documents.ts`. My Documents calls `GET /v1/documents` (full list; client filters by tab and paginates 10 per page) and subscribes to `WS /v1/ws/documents?token=<jwt>`. Any `apiFetch` response with status **500+** shows a red top toast via `showToast` (`useToast`) and still throws `ApiError`. Multipart uploads use a 120s timeout.
+Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Usage calls `GET /v1/usage` and `GET /v1/usage/activities` via `frontend/src/api/usage.ts`. Chat threads call `GET /v1/conversations` and `GET /v1/conversations/{id}` via `frontend/src/api/conversations.ts`. Upload calls `POST /v1/documents` (multipart `file` + `doc_type`) via `uploadDocument` in `frontend/src/api/documents.ts`. My Documents calls `GET /v1/documents` (full list; client filters by tab and paginates 10 per page) and subscribes to `WS /v1/ws/documents?token=<jwt>`. Any `apiFetch` response with status **500+** shows a red top toast via `showToast` (`useToast`) and still throws `ApiError`. Multipart uploads use a 120s timeout.
 
 ### Mock / local data the UI already uses
 
@@ -541,7 +551,7 @@ These work in the browser without a backend:
 - Dashboard shell: fixed left nav, top bar, inner scrolling, collapsible left/right sidebars with persistence
 - Home: hero, quick actions, live documents/stats/conversations from `/v1/home`
 - My Documents: resume/JD tabs, search, 10-per-page pagination from `/v1/documents`
-- Analysis: coming-soon page
+- Usage: token cards, trend/donut/bar charts, latest 5 activities from `/v1/usage`, View all modal from `/v1/usage/activities`
 - Upload: drag-and-drop / file picker with type and size filter; add/remove resumes and JDs; paste-text as a `.txt` file; Continue uploads then opens My Documents
 - **Chat:** copy and thumbs on assistant replies; filename sources open in the sample-style file modal; globe toggles web search; extra composer models are disabled
 - Prepare for Interviews: topic list above Settings, practice/mock settings, table/code answers (local send)
@@ -595,6 +605,11 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 ### Home (implemented)
 
 - `GET /v1/home` — recent documents, counts, recent conversations (JWT required)
+
+### Usage (implemented)
+
+- `GET /v1/usage?range=7d|30d|90d` — token dashboard for the signed-in user (JWT required). `recent` is the latest 5 activities. Usage rows stay after chats or documents are deleted.
+- `GET /v1/usage/activities?start=YYYY-MM-DD&end=YYYY-MM-DD` — full activity rows for the date filter (defaults to the last 30 days).
 
 ### Documents (list + upload implemented)
 
@@ -658,7 +673,7 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 
 1. Chat document pickers use processed rows from `GET /v1/documents`.
 2. **Continue** on upload navigates to `/documents` after files persist (not chat).
-3. Add Home / Analysis / etc. only as real views; don’t turn sidebar `div`s into dead `/home` routes that 404.
+3. Add Home / Usage / etc. only as real views; don’t turn sidebar `div`s into dead `/home` routes that 404.
 4. If you add env, use `VITE_` prefix and extend `vite-env.d.ts`; never commit secrets.
 5. Update this file when routes, APIs, or document flow change.
 

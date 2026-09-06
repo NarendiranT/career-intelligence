@@ -17,7 +17,7 @@ from agent.context_budget import (
 )
 from agent.llm import get_chat_model, get_embeddings, invoke_structured_tracked
 from agent.schemas import FaithfulnessResult, GeneratedAnswer, InterviewTopicPlan, QueryPlan, RetrievedChunk
-from agent.usage import append_usage, persist_usage_events, summarize_usage
+from agent.usage import append_usage, persist_usage_events, question_usage_details, summarize_usage
 from backend.config import settings
 from backend.db import session_scope
 from backend.models import Chunk, Document
@@ -218,7 +218,11 @@ def extract_interview_topics(state: RagState) -> dict[str, Any]:
         user_id=_user(state),
         conversation_id=uuid.UUID(str(source_conversation_id)) if source_conversation_id else None,
         events=usage_events,
-        extra={"channel": "extract_topics"},
+        extra={
+            "channel": "extract_topics",
+            "feature": "interview",
+            "details": question_usage_details(None, extract_topics=True),
+        },
     )
     names = [item.get("label") or "" for item in topics if isinstance(item, dict)]
     text = "Created interview topics: " + ", ".join(name for name in names if name)
@@ -637,11 +641,18 @@ def stream_and_persist(state: RagState) -> dict[str, Any]:
         citations=answer.get("citations"),
         extra=extra,
     )
+    channel = str(state.get("channel") or "assistant")
     persist_usage_events(
         user_id=user_id,
         conversation_id=convo_id,
         events=state.get("usage_events") or [],
-        extra={"web_search": bool(state.get("web_search")), "ui_model": state.get("model")},
+        extra={
+            "web_search": bool(state.get("web_search")),
+            "ui_model": state.get("model"),
+            "channel": channel,
+            "feature": "interview" if channel in {"interview", "extract_topics"} else "chat",
+            "details": question_usage_details(state.get("question"), extract_topics=channel == "extract_topics"),
+        },
     )
     tools.invoke("web_search", query=state["question"], enabled=bool(state.get("web_search")))
     return {
