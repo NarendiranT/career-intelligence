@@ -5,10 +5,10 @@ const draft = defineModel<string>('draft', { default: '' })
 const modelValue = defineModel<string>('model', { default: 'gpt-4o' })
 
 const models = [
-  { id: 'gpt-4o', label: 'GPT-4o' },
-  { id: 'claude-3.5', label: 'Claude 3.5' },
-  { id: 'gemini-pro', label: 'Gemini Pro' },
-  { id: 'deep-research', label: 'Deep Research' },
+  { id: 'gpt-4o', label: 'GPT-4o' , enabled : false},
+  { id: 'claude-3.5', label: 'Claude 3.5' , enabled : false},
+  { id: 'gemini-pro', label: 'Gemini Pro', enabled : false },
+  { id: 'deep-research', label: 'Deep Research', enabled : true },
 ]
 
 defineEmits<{
@@ -37,7 +37,7 @@ defineEmits<{
             v-model="modelValue"
             class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 outline-none"
           >
-            <option v-for="item in models" :key="item.id" :value="item.id">{{ item.label }}</option>
+            <option v-for="item in models" :key="item.id" :value="item.id" :disabled="!item.enabled">{{ item.label }}</option>
           </select>
         </div>
         <button

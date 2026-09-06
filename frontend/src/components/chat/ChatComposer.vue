@@ -32,9 +32,6 @@ defineEmits<{
       />
       <div class="flex items-center justify-between gap-3 pb-1">
         <div class="flex items-center gap-1 text-slate-400">
-          <button class="rounded-lg p-2 hover:bg-slate-50" type="button" aria-label="Attach" disabled>
-            <Paperclip class="h-4 w-4" />
-          </button>
           <select
             v-model="modelValue"
             class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 outline-none"
