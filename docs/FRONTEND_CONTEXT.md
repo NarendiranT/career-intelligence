@@ -206,7 +206,7 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 - `DashboardLayout` with `show-interview-topics` and `#right` = `InterviewRightPanel`.
 - Left sidebar **Interview Topics** sit **above** Settings / Help (not below them). Topics come from `GET /v1/topics` via `useInterview()`. Each topic shows a practiced-question count (user interview messages), capped at **99+**.
 - Main: topic title, Change Topic menu, empty state that points back to chat when the user has no topics. Messages load from the topic’s interview conversation.
-- Right: Practice / Mock, response style, difficulty, toggles, Clear Chat. Those settings compile into `system_prompt` on each `chat.ask`.
+- Right: Practice / Mock, response style, difficulty, toggles, Clear Chat. Those settings compile into `system_prompt` on each `chat.ask`. **Clear Chat** deletes the topic conversation’s messages (`DELETE /v1/conversations/{id}/messages`), empties the thread, and resets the sidebar question count to 0.
 - **Status:** Wired to `GET /v1/topics` + `WS /v1/ws/chat` (`channel=interview`).
 
 ### `/maintenance` — `maintenance` — `frontend/src/views/MaintenanceView.vue`
@@ -651,6 +651,7 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 
 - `GET /v1/topics` — owner topics with `conversation_id` and `question_count` (user messages in that interview thread)
 - `GET /v1/topics/{id}` — same plus context / resume / jobs
+- `DELETE /v1/conversations/{id}/messages` — Clear Chat on Prepare for Interviews (and reusable for assistant threads); conversation row stays, messages and `question_count` reset
 - Sidebar and Change Topic menu display the count as `0`–`99` or `99+`
 
 **Assumption:** REST + optional SSE is enough; nothing in the frontend commits to a protocol.

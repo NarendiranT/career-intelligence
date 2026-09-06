@@ -152,6 +152,15 @@ def test_bookmark_and_delete_conversation():
     )
     assert forbidden.status_code == 404
 
+    cleared = client.delete(f"/v1/conversations/{convo_id}/messages", headers=auth_headers(token))
+    assert cleared.status_code == 204
+    empty = client.get(f"/v1/conversations/{convo_id}", headers=auth_headers(token))
+    assert empty.status_code == 200
+    assert empty.json()["messages"] == []
+
+    forbidden_clear = client.delete(f"/v1/conversations/{convo_id}/messages", headers=auth_headers(other))
+    assert forbidden_clear.status_code == 404
+
     removed = client.delete(f"/v1/conversations/{convo_id}", headers=auth_headers(token))
     assert removed.status_code == 204
     assert client.get(f"/v1/conversations/{convo_id}", headers=auth_headers(token)).status_code == 404

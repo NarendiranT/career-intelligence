@@ -82,7 +82,7 @@ Each upload inserts a `documents` row, then runs `indexing_graph` in a FastAPI b
 
 The graph starts at `identify_channel`. `channel=extract_topics` runs `extract_interview_topics` and exits. `channel=interview` loads the topic, then follows retrieve → generate → persist (no faithfulness). `channel=assistant` is the original path.
 
-Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner usage dashboard: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent **assistant** threads) and `GET /v1/conversations/<id>` (messages). Interview topics: `GET /v1/topics` (`question_count` = user messages in that topic’s interview conversation).
+Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner usage dashboard: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent **assistant** threads) and `GET /v1/conversations/<id>` (messages). Clear a thread with `DELETE /v1/conversations/<id>/messages` (keeps the conversation; interview `question_count` goes to 0). Interview topics: `GET /v1/topics` (`question_count` = user messages in that topic’s interview conversation).
 
 ```bash
 curl -s -X POST http://localhost:8000/v1/chat \

@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from backend.api_schemas import ConversationBookmarkIn, ConversationDetailOut, ConversationOut
 from backend.conversation_service import (
     SIDEBAR_CONVERSATION_LIMIT,
+    clear_conversation_messages,
     conversation_document_context,
     conversation_to_out,
     get_owned_conversation,
@@ -74,6 +75,20 @@ def bookmark_conversation(
         select(Message).where(Message.conversation_id == convo.id).order_by(Message.created_at.asc())
     ).all()
     return conversation_to_out(convo, list(messages))
+
+
+@router.delete("/{conversation_id}/messages", status_code=204)
+def clear_conversation(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_user_id),
+) -> Response:
+    convo = get_owned_conversation(db, user_id, conversation_id)
+    if convo is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    clear_conversation_messages(db, convo.id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/{conversation_id}", status_code=204)

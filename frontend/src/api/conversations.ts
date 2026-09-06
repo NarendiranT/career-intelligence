@@ -19,3 +19,7 @@ export function bookmarkConversation(id: string, bookmarked: boolean): Promise<C
 export function deleteConversation(id: string): Promise<void> {
   return apiFetch<void>(`/v1/conversations/${id}`, { method: 'DELETE' })
 }
+
+export function clearConversationMessages(id: string): Promise<void> {
+  return apiFetch<void>(`/v1/conversations/${id}/messages`, { method: 'DELETE' })
+}

@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from uuid import UUID
 
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from backend.api_schemas import ConversationMessageOut, ConversationOut, CitationOut
@@ -128,6 +129,10 @@ def get_owned_conversation(db: Session, user_id: UUID, conversation_id: UUID) ->
     return db.exec(
         select(Conversation).where(Conversation.id == conversation_id, Conversation.user_id == user_id)
     ).first()
+
+
+def clear_conversation_messages(db: Session, conversation_id: UUID) -> None:
+    db.exec(delete(Message).where(Message.conversation_id == conversation_id))
 
 
 def message_to_out(message: Message) -> ConversationMessageOut:

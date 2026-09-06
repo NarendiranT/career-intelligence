@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronDown, LoaderCircle } from '@lucide/vue'
-import { getConversation } from '@/api/conversations'
+import { clearConversationMessages, getConversation } from '@/api/conversations'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import InterviewComposer from '@/components/interview/InterviewComposer.vue'
 import InterviewMessage from '@/components/interview/InterviewMessage.vue'
@@ -34,6 +34,7 @@ const {
   topicsLoading,
   selectTopic,
   incrementQuestionCount,
+  resetQuestionCount,
   loadTopics,
 } = useInterview()
 
@@ -228,8 +229,21 @@ function send(text = draft.value): void {
   incrementQuestionCount(topic.id)
 }
 
-function clearChat(): void {
-  messages.value = selectedTopic.value ? [greetingForTopic()] : []
+async function clearChat(): Promise<void> {
+  const topic = selectedTopic.value
+  const convoId = conversationId.value
+  if (sending.value) return
+  if (convoId) {
+    try {
+      await clearConversationMessages(convoId)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not clear chat', 'error')
+      return
+    }
+  }
+  messages.value = [greetingForTopic()]
+  assistantId.value = null
+  if (topic) resetQuestionCount(topic.id)
 }
 
 function chooseTopic(id: string): void {

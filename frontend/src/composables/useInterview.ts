@@ -30,6 +30,12 @@ export function useInterview() {
     topic.question_count = (topic.question_count ?? 0) + 1
   }
 
+  function resetQuestionCount(id: string) {
+    const topic = topics.value.find((item) => item.id === id)
+    if (!topic) return
+    topic.question_count = 0
+  }
+
   async function loadTopics(): Promise<InterviewTopic[]> {
     topicsLoading.value = true
     try {
@@ -54,6 +60,7 @@ export function useInterview() {
     topicsLoading,
     selectTopic,
     incrementQuestionCount,
+    resetQuestionCount,
     loadTopics,
   }
 }

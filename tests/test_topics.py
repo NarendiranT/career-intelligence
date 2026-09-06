@@ -142,3 +142,9 @@ def test_topic_question_count_is_user_messages():
     detail = client.get(f"/v1/topics/{topic_id}", headers=auth_headers(token))
     assert detail.status_code == 200
     assert detail.json()["question_count"] == 3
+
+    listed_ids = listed.json()
+    convo_id = listed_ids[0]["conversation_id"]
+    cleared = client.delete(f"/v1/conversations/{convo_id}/messages", headers=auth_headers(token))
+    assert cleared.status_code == 204
+    assert client.get("/v1/topics", headers=auth_headers(token)).json()[0]["question_count"] == 0
