@@ -793,6 +793,12 @@ The Vue app commits to **WebSocket** for chat and document status; REST/SSE is a
 
 ### Suggested next backend-facing tasks
 
-- Token streaming is already WebSocket `chat.token`; keep generation models within Groq TPM limits
-- Wire thumbs feedback to an API if product wants it
+See **What we'd add next** in the root `README.md` for the product backlog. Highest-leverage items:
+
+- Queue indexing/RAG (SQS first, Kafka if we need replay) so graphs do not run in FastAPI `BackgroundTasks`
+- API rate limits (429 / `chat.error`) and Vue toasts
+- Enforce token caps and later subscription tiers on top of existing `GET /v1/usage` (record-only today)
+- Persist chat/interview thumbs to the API; async LLM-as-judge after each reply
+- Separate **admin panel** (users created, chats asked, all-user token usage, judge eval, human feedback)
+- Fine-tune assistant / interview models from thumbs + judge scores when there is enough labeled data
 - Topic delete UI if product wants to remove interview topics
