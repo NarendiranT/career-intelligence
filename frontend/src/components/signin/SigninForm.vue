@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Eye, EyeOff, Lock, Mail } from '@lucide/vue'
 import { ApiError } from '@/api/client'
+import { readRememberedEmail, writeRememberedEmail } from '@/api/token'
 import { safeNextPath, useAuth } from '@/composables/useAuth'
 import FormInput from '@/components/signup/FormInput.vue'
 import SocialButton from '@/components/signup/SocialButton.vue'
@@ -11,9 +12,9 @@ const route = useRoute()
 const router = useRouter()
 const { login } = useAuth()
 
-const email = ref('')
+const email = ref(readRememberedEmail())
 const password = ref('')
-const remember = ref(false)
+const remember = ref(Boolean(email.value))
 const showPassword = ref(false)
 const submitted = ref(false)
 const pending = ref(false)
@@ -28,6 +29,7 @@ async function onSubmit() {
   pending.value = true
   try {
     await login(email.value, password.value, remember.value)
+    writeRememberedEmail(remember.value ? email.value : null)
     await router.replace(safeNextPath(route.query.next))
   } catch (error) {
     serverError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
@@ -109,7 +111,6 @@ async function onSubmit() {
               />
               Remember me
             </label>
-            <a class="font-medium text-brand hover:underline" href="#">Forgot password?</a>
           </div>
 
           <p v-if="serverError" class="text-sm text-red-500">{{ serverError }}</p>

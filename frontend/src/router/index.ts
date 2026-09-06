@@ -11,6 +11,7 @@ import UsageView from '@/views/UsageView.vue'
 import SkillsView from '@/views/SkillsView.vue'
 import ChatView from '@/views/ChatView.vue'
 import InterviewView from '@/views/InterviewView.vue'
+import LegalView from '@/views/LegalView.vue'
 import MaintenanceView from '@/views/MaintenanceView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
@@ -28,6 +29,8 @@ const router = createRouter({
     { path: '/', name: 'signup', component: SignupView, meta: { title: 'Create Account', guest: true } },
     { path: '/signup', redirect: '/' },
     { path: '/signin', name: 'signin', component: SigninView, meta: { title: 'Sign In', guest: true } },
+    { path: '/terms', name: 'terms', component: LegalView, meta: { title: 'Terms of Service' } },
+    { path: '/privacy', name: 'privacy', component: LegalView, meta: { title: 'Privacy Policy' } },
     { path: '/home', name: 'home', component: HomeView, meta: { title: 'Home', requiresAuth: true } },
     { path: '/upload', name: 'upload', component: UploadView, meta: { title: 'Upload Documents', requiresAuth: true } },
     { path: '/documents', name: 'documents', component: DocumentsView, meta: { title: 'My Documents', requiresAuth: true } },

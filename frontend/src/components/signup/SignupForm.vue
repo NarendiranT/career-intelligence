@@ -156,9 +156,23 @@ async function onSubmit() {
             />
             <span>
               I agree to the
-              <a class="font-medium text-brand hover:underline" href="#">Terms of Service</a>
+              <RouterLink
+                class="font-medium text-brand hover:underline"
+                to="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Terms of Service
+              </RouterLink>
               and
-              <a class="font-medium text-brand hover:underline" href="#">Privacy Policy</a>
+              <RouterLink
+                class="font-medium text-brand hover:underline"
+                to="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Privacy Policy
+              </RouterLink>
             </span>
           </label>
           <p v-if="submitted && !agreed" class="text-xs text-red-500">Please accept the terms to continue.</p>

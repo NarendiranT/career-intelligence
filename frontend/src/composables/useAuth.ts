@@ -11,8 +11,8 @@ const bootstrapped = ref(false)
 let bootPromise: Promise<void> | null = null
 let unauthorizedBound = false
 
-function applySession(accessToken: string, nextUser: AuthUser): void {
-  writeToken(accessToken)
+function applySession(accessToken: string, nextUser: AuthUser, persist = true): void {
+  writeToken(accessToken, persist)
   token.value = accessToken
   user.value = nextUser
 }
@@ -79,7 +79,7 @@ export function useAuth() {
       password,
       remember,
     })
-    applySession(result.access_token, result.user)
+    applySession(result.access_token, result.user, remember)
   }
 
   async function logout(): Promise<void> {

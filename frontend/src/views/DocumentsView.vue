@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ChevronLeft, ChevronRight, FileText, LoaderCircle, Search, Trash2 } from '@lucide/vue'
 import { deleteDocument, listDocuments } from '@/api/documents'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
@@ -18,6 +19,8 @@ type DocTab = 'resumes' | 'jobs'
 
 const PAGE_SIZE = 10
 
+const route = useRoute()
+const router = useRouter()
 const tab = ref<DocTab>('resumes')
 const query = ref('')
 const page = ref(1)
@@ -55,6 +58,27 @@ const rows = computed(() => {
   const start = (page.value - 1) * PAGE_SIZE
   return filtered.value.slice(start, start + PAGE_SIZE)
 })
+
+function tabFromQuery(value: unknown): DocTab {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw === 'jobs' ? 'jobs' : 'resumes'
+}
+
+function setTab(next: DocTab) {
+  tab.value = next
+  void router.replace({
+    path: '/documents',
+    query: next === 'jobs' ? { tab: 'jobs' } : {},
+  })
+}
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    tab.value = tabFromQuery(value)
+  },
+  { immediate: true },
+)
 
 watch(tab, () => {
   query.value = ''
@@ -154,7 +178,7 @@ onMounted(() => {
               class="rounded-lg px-3 py-2 text-sm font-semibold"
               :class="tab === 'resumes' ? 'bg-white text-brand shadow-sm' : 'text-slate-500'"
               type="button"
-              @click="tab = 'resumes'"
+              @click="setTab('resumes')"
             >
               My Resumes
               <span class="ml-1 text-[11px] font-medium text-slate-400">({{ resumes.length }})</span>
@@ -163,7 +187,7 @@ onMounted(() => {
               class="rounded-lg px-3 py-2 text-sm font-semibold"
               :class="tab === 'jobs' ? 'bg-white text-brand shadow-sm' : 'text-slate-500'"
               type="button"
-              @click="tab = 'jobs'"
+              @click="setTab('jobs')"
             >
               Job Descriptions
               <span class="ml-1 text-[11px] font-medium text-slate-400">({{ jobs.length }})</span>

@@ -80,6 +80,33 @@ def test_documents_and_chat_require_auth():
 
 
 @requires_postgres
+def test_remember_me_issues_longer_lived_token():
+    import jwt
+
+    from backend.config import settings
+
+    email = f"{uuid.uuid4()}@example.com"
+    _register(email=email)
+    short = client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": TEST_PASSWORD, "remember": False},
+    )
+    long = client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": TEST_PASSWORD, "remember": True},
+    )
+    assert short.status_code == 200
+    assert long.status_code == 200
+    short_exp = jwt.decode(
+        short.json()["access_token"], settings.jwt_secret, algorithms=[settings.jwt_alg]
+    )["exp"]
+    long_exp = jwt.decode(
+        long.json()["access_token"], settings.jwt_secret, algorithms=[settings.jwt_alg]
+    )["exp"]
+    assert long_exp - short_exp >= 60 * 24 * 20 * 60
+
+
+@requires_postgres
 def test_logout_is_noop():
     response = client.post("/v1/auth/logout")
     assert response.status_code == 204

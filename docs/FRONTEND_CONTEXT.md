@@ -6,7 +6,7 @@ This document describes the **implemented** Vue frontend as of the current sourc
 **App code:** `frontend/`  
 **This file:** `docs/FRONTEND_CONTEXT.md`
 
-Auth (register/login/`/me`) is wired to FastAPI with a JWT stored in `localStorage`. Home loads `GET /v1/home`. Upload posts files to `POST /v1/documents` then navigates to My Documents (`GET /v1/documents`). Indexing status arrives on `WS /v1/ws/documents?token=…`. Chat loads those documents and streams RAG answers on `WS /v1/ws/chat?token=…`.
+Auth (register/login/`/me`) is wired to FastAPI with a JWT stored in `localStorage` (Remember me) or `sessionStorage`. Home loads `GET /v1/home`. Upload posts files to `POST /v1/documents` then navigates to My Documents (`GET /v1/documents`). Indexing status arrives on `WS /v1/ws/documents?token=…`. Chat loads those documents and streams RAG answers on `WS /v1/ws/chat?token=…`.
 
 ---
 
@@ -31,6 +31,7 @@ Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Document
 | Skills | Yes (`GET /v1/skills`; unions all resume profiles) |
 | Chat with assistant | Yes (`GET /v1/documents` + `WS /v1/ws/chat`; token usage on `chat.done`) |
 | Prepare for Interviews | Yes (`GET /v1/topics` + `WS /v1/ws/chat` with `channel=interview` / `extract_topics`) |
+| Terms / Privacy | No (static pages `/terms`, `/privacy`) |
 
 There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api/client.ts`). Leave `VITE_API_BASE_URL` empty to use the Vite `/v1` proxy. Dashboard routes use `meta.requiresAuth`.
 
@@ -39,7 +40,7 @@ There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api
 1. **Landing = sign up** (`/`): marketing panel + create-account form. Client-side validation, then register API. Success stores JWT and navigates to `/home` (or `?next=`).
 2. **Sign in** (`/signin`): same split layout; login API with optional remember-me (longer JWT TTL). Guest-only: authenticated users are sent to `/home`.
 3. **Home** (`/home`): dashboard chrome (requires auth). Hero, quick actions, and live recent documents / stats / conversations from `GET /v1/home`.
-4. **Upload** (`/upload`): dashboard chrome. Empty resume/JD lists until the user adds files (multiple of each). **View sample** opens a PDF modal. **Continue** uploads every pending file then goes to `/documents`.
+4. **Upload** (`/upload`): dashboard chrome. Empty resume/JD lists until the user adds files (multiple of each). **View sample** opens a PDF modal. **Continue** uploads every pending file then goes to `/documents` (Job Descriptions tab when only JDs were uploaded).
 5. **My Documents** (`/documents`): two tabs (resumes / job descriptions), search, 10-per-page pagination. Loaded from `GET /v1/documents`; status badges update over the document WebSocket.
 6. **Usage** (`/usage`): token dashboard from `GET /v1/usage` (range 7/30/90 days). Recent Usage shows the latest 5 rows; **View all** opens a date-filtered table with CSV export from `GET /v1/usage/activities`. `/analysis` redirects here.
 7. **Skills** (`/skills`): merged skill profile from `GET /v1/skills`. **Upload Resume** goes to `/upload`.
@@ -64,7 +65,7 @@ Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 | Font | Inter from Google Fonts in `frontend/index.html` |
 | State | Component `ref` / `computed` / `defineModel`; module composables `useSidebar`, `useAuth`, `useToast` |
 | API client | `frontend/src/api/client.ts` (`fetch` + Bearer token) |
-| Auth | Email/password JWT in `localStorage` key `ci.accessToken`; no OAuth SDK |
+| Auth | Email/password JWT: `localStorage` `ci.accessToken` when Remember me is on, otherwise `sessionStorage`; no OAuth SDK |
 | WebSocket / SSE | Document status WebSocket (`useDocumentRealtime`); chat RAG WebSocket (`useChatRealtime`) |
 | Tests | **None** in `frontend/` |
 
@@ -140,17 +141,19 @@ career-intelligence/
 
 Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to `Career Intelligence — ${meta.title}`.
 
-`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`. Protected: `/home`, `/upload`, `/documents`, `/usage`, `/skills`, `/chat`, `/interview`. `/analysis` redirects to `/usage`. Session presence is the `ci.accessToken` localStorage key. Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
+`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`. Public legal pages (no auth, no guest bounce): `/terms`, `/privacy`. Protected: `/home`, `/upload`, `/documents`, `/usage`, `/skills`, `/chat`, `/interview`. `/analysis` redirects to `/usage`. Session presence is `ci.accessToken` in `localStorage` (Remember me) or `sessionStorage` (this browser session). Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
 
 ### `/` — `signup` — `frontend/src/views/SignupView.vue`
 
 - Split layout: `MarketingPanel` + `SignupForm`.
 - `/signup` redirects here.
+- Terms checkbox is required. **Terms of Service** and **Privacy Policy** open `/terms` and `/privacy` in a new tab.
 - **Status:** Validates then `POST /v1/auth/register`.
 
 ### `/signin` — `signin` — `frontend/src/views/SigninView.vue`
 
 - Same marketing panel + `SigninForm`.
+- **Remember me:** checked login stores the JWT in `localStorage` and a 30-day token (`remember: true`). Unchecked stores the JWT in `sessionStorage` and a 1-day token. The email is restored from `localStorage` `ci.rememberEmail` when the box was previously checked.
 - **Status:** Validates then `POST /v1/auth/login`. Forgot-password is `href="#"`.
 
 ### `/home` — `home` — `frontend/src/views/HomeView.vue`
@@ -165,13 +168,13 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 - Wrapped in `DashboardLayout` with `#right` = `UploadInfoSidebar`.
 - Resume and JD: multi-file dropzones. JD also has a paste-text tab (kept as a `.txt` `File`).
 - File lists start empty. **View sample** opens a modal with a static PDF (`frontend/public/samples/`).
-- **Continue** posts each file to `POST /v1/documents` with `doc_type`, then navigates to `/documents`.
+- **Continue** posts each file to `POST /v1/documents` with `doc_type`, then navigates to `/documents`. If the batch was job descriptions only, it opens `/documents?tab=jobs`.
 - **Status:** Wired to the upload API.
 
 ### `/documents` — `documents` — `frontend/src/views/DocumentsView.vue`
 
 - `DashboardLayout` with **no** right slot.
-- Tabs: **My Resumes** and **Job Descriptions**. Search filters the active tab by name, size, status, or uploaded label.
+- Tabs: **My Resumes** and **Job Descriptions**. `?tab=jobs` selects Job Descriptions. Search filters the active tab by name, size, status, or uploaded label.
 - Tables: name, size, uploaded label, status (`uploaded` / `processing` / `processed` / `failed`). Processing shows a spinner. **Delete** confirms then calls `DELETE /v1/documents/{id}`.
 - Both tabs paginate at 10 rows per page.
 - Documents come from `GET /v1/documents` (`frontend/src/api/documents.ts`). Live patches come from `useDocumentRealtime` (`WS /v1/ws/documents?token=`). Untyped rows (`doc_type` null) appear under resumes.
@@ -208,6 +211,16 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 - Main: topic title, Change Topic menu, empty state that points back to chat when the user has no topics. Messages load from the topic’s interview conversation.
 - Right: Practice / Mock, response style, difficulty, toggles, Clear Chat. Those settings compile into `system_prompt` on each `chat.ask`. **Clear Chat** deletes the topic conversation’s messages (`DELETE /v1/conversations/{id}/messages`), empties the thread, and resets the sidebar question count to 0.
 - **Status:** Wired to `GET /v1/topics` + `WS /v1/ws/chat` (`channel=interview`).
+
+### `/terms` — `terms` — `frontend/src/views/LegalView.vue`
+
+- Full-page (no dashboard chrome). Simple Terms of Service copy. Back link goes to sign up when logged out, Home when signed in. Also links to `/privacy`.
+- Public: signed-in users are not redirected away.
+
+### `/privacy` — `privacy` — `frontend/src/views/LegalView.vue`
+
+- Same layout as `/terms`. Simple Privacy Policy copy (account data, uploads, AI processing, local storage).
+- Public: signed-in users are not redirected away.
 
 ### `/maintenance` — `maintenance` — `frontend/src/views/MaintenanceView.vue`
 
@@ -252,9 +265,9 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`CareerFlowIllustration.vue`** — Image only.
 
-**`SignupForm.vue`** — Local refs plus `pending` / `serverError`. Password regex: 8+ chars, letter, digit, symbol. Calls `useAuth().register`. Google/Microsoft `SocialButton`s are disabled (“Coming soon”). Terms/privacy `href="#"`.
+**`SignupForm.vue`** — Local refs plus `pending` / `serverError`. Password regex: 8+ chars, letter, digit, symbol. Calls `useAuth().register`. Google/Microsoft `SocialButton`s are disabled (“Coming soon”). Terms checkbox required; Terms of Service and Privacy Policy open `/terms` and `/privacy` in a new tab.
 
-**`SigninForm.vue`** — `email`, `password`, `remember`, plus `pending` / `serverError`. Calls `useAuth().login`; `remember` maps to a longer JWT expiry on the server.
+**`SigninForm.vue`** — `email`, `password`, `remember`, plus `pending` / `serverError`. Calls `useAuth().login`; `remember` maps to a 30-day JWT, `localStorage` token storage, and saved email (`ci.rememberEmail`). Unchecked uses a 1-day JWT in `sessionStorage` and clears the saved email.
 
 **`FormInput.vue`** — Props: `label`, `modelValue`, `placeholder?`, `type?`, `autocomplete?`, `hint?`, `error?`. Slots: `icon`, `action`.
 
@@ -274,7 +287,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`UploadedFileRow.vue`** — Prop: `file: UploadedDoc`. Emit: `remove`. Badge is PDF/DOCX/DOC/TXT from the filename.
 
-**`UploadInfoSidebar.vue`** — Static tips, “what happens next”, security copy. Privacy link `href="#"`.
+**`UploadInfoSidebar.vue`** — Static tips, “what happens next”, security copy.
 
 ### Chat
 
@@ -302,6 +315,10 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 - `lg:grid-cols-2`: left marketing (`hidden` until `lg`), right form.
 - **Not** using `DashboardLayout`. Window scroll is allowed.
 
+### Legal pages (`LegalView` at `/terms` and `/privacy`)
+
+- Full-page `min-h-dvh`, header + article. No dashboard chrome. Window scroll is allowed.
+
 ### Dashboard (`HomeView`, `UploadView`, `DocumentsView`, `UsageView`, `SkillsView`, `ChatView`, `InterviewView`)
 
 ```text
@@ -328,12 +345,12 @@ JWT Bearer tokens from FastAPI. Token key: `ci.accessToken`. Session state: `use
 
 | Step | Code behavior |
 | --- | --- |
-| Sign up | Client validation, then `POST /v1/auth/register`. Token + user stored; navigate to `next` or `/home`. |
-| Sign in | Non-empty email/password, then `POST /v1/auth/login` with `remember`. |
+| Sign up | Client validation, then `POST /v1/auth/register`. Token + user stored in `localStorage`; navigate to `next` or `/home`. |
+| Sign in | Non-empty email/password, then `POST /v1/auth/login` with `remember`. Remember me: 30-day JWT + `localStorage` + saved email. Otherwise: 1-day JWT + `sessionStorage`. |
 | Social | Disabled; title “Coming soon”. |
-| Logout | Top-bar menu; `POST /v1/auth/logout` (stateless 204) and clear token. |
+| Logout | Top-bar menu; `POST /v1/auth/logout` (stateless 204) and clear token from both storages. |
 | Protected routes | Dashboard routes require a valid session; guest routes bounce authenticated users to `/home`. |
-| Tokens | JWT in `localStorage`; `Authorization: Bearer` on authenticated `fetch`. |
+| Tokens | JWT in `localStorage` or `sessionStorage`; `Authorization: Bearer` on authenticated `fetch`. |
 | Current user | `GET /v1/auth/me` on bootstrap; top bar uses `full_name`. |
 
 ---
@@ -363,7 +380,7 @@ No global store.
 | State | Where | Lifetime |
 | --- | --- | --- |
 | Sidebar collapse | `useSidebar.ts` module-level `ref`s + `localStorage` | Shared across dashboard pages in the same tab; survives reload |
-| Signup/signin fields | Form components | Lost on navigation |
+| Signup/signin fields | Form components | Lost on navigation except remembered email (`ci.rememberEmail`) |
 | Upload file lists | `UploadView` refs | Lost on leave; server rows live on `/documents` |
 | Document WS | `useDocumentRealtime` module socket | Shared while Home or My Documents is mounted |
 | Chat messages, draft, settings, selected doc IDs, conversation id | `ChatView` refs | Lost on leave |
@@ -403,7 +420,7 @@ Data flow is parent `ref` → child `v-model` / props. Chat settings (`temperatu
 
 JD **View sample** shows `/samples/sample-job-description.pdf` in the same modal.
 
-**Continue:** uploads every pending resume/JD via `POST /v1/documents`, then `router.push('/documents')`. Disabled with no files; shows a spinner while posting.
+**Continue:** uploads every pending resume/JD via `POST /v1/documents`, then `router.push('/documents')` (or `/documents?tab=jobs` when no resumes were in the batch). Disabled with no files; shows a spinner while posting.
 
 There is **no** shared Pinia store. Chat and My Documents each call `GET /v1/documents`. Home and My Documents (and Chat) patch rows from the document WebSocket.
 
@@ -562,7 +579,8 @@ Node 22 types are in `devDependencies` (`@types/node`).
 
 These work in the browser without a backend:
 
-- Sign-up and sign-in layouts, field validation, password visibility, JWT register/login, route guards, logout
+- Sign-up and sign-in layouts, field validation, password visibility, JWT register/login, Remember me (persistent vs session token + saved email), route guards, logout
+- Simple Terms of Service (`/terms`) and Privacy Policy (`/privacy`) linked from the sign-up checkbox
 - Document title updates per route
 - Dashboard shell: fixed left nav, top bar, inner scrolling, collapsible left/right sidebars with persistence
 - Home: hero, quick actions, live documents/stats/conversations from `/v1/home`
@@ -584,8 +602,8 @@ These work in the browser without a backend:
 **Auth**
 
 - Google/Microsoft OAuth not implemented (buttons disabled)
-- Terms, privacy, forgot password are `#`
-- No refresh-token rotation; JWT lives in `localStorage`
+- Forgot password is `#`
+- No refresh-token rotation; session JWT is `localStorage` or `sessionStorage` depending on Remember me
 
 **Navigation**
 
@@ -694,7 +712,7 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 ### How to continue consistently
 
 1. Chat document pickers use processed rows from `GET /v1/documents`.
-2. **Continue** on upload navigates to `/documents` after files persist (not chat).
+2. **Continue** on upload navigates to `/documents` after files persist (not chat). JD-only uploads open the Job Descriptions tab (`?tab=jobs`).
 3. Add Home / Usage / etc. only as real views; don’t turn sidebar `div`s into dead `/home` routes that 404.
 4. If you add env, use `VITE_` prefix and extend `vite-env.d.ts`; never commit secrets.
 5. Update this file when routes, APIs, or document flow change.

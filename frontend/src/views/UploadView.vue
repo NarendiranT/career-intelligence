@@ -76,7 +76,8 @@ async function continueUpload() {
   if (failed > 0) {
     showToast(`${failed} file${failed === 1 ? '' : 's'} failed to upload.`, 'error')
   }
-  await router.push('/documents')
+  const onlyJobs = resumeFiles.value.length === 0 && jobFiles.value.length > 0
+  await router.push(onlyJobs ? { path: '/documents', query: { tab: 'jobs' } } : '/documents')
 }
 </script>
 
