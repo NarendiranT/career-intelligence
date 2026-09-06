@@ -29,6 +29,8 @@ uvicorn backend.app:app --reload --port 8000
 
 Identity: send `Authorization: Bearer <jwt>` from `POST /v1/auth/register`, `/v1/auth/login`, or `/v1/auth/oauth`. Documents and chat reject missing or invalid tokens with 401.
 
+For local UI + API together (after `docker compose`, `alembic upgrade head`, and `frontend` `npm install`): `python run.py` from the repo root (ports 8000 and 5173). Ctrl+C stops both.
+
 Google/Microsoft buttons enable when `GOOGLE_CLIENT_ID` / `MICROSOFT_CLIENT_ID` are set on the API. `GET /v1/auth/oauth/config` returns those public client IDs (empty string = button disabled). `POST /v1/auth/oauth` takes `{ "provider": "google"|"microsoft", "id_token": "...", "remember": false }`, verifies the token, find-or-creates the user by email, and returns the same JWT payload as login. Empty API keys return 503.
 
 ## Observability

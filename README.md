@@ -13,8 +13,23 @@ career-intelligence/
 ├── alembic/    Postgres migrations
 ├── otel/       Collector and Prometheus config
 ├── data/       Local uploads
-└── docs/       Design and architecture notes
+├── docs/       Design and architecture notes
+└── run.py      Starts FastAPI + Vite together
 ```
+
+## Run frontend and backend together
+
+After Postgres is up, migrations are applied, and `frontend/` has `npm install` (see Backend below):
+
+```bash
+source .venv/bin/activate
+python run.py
+```
+
+- API: http://localhost:8000 (`/health`, `/docs`)
+- UI: http://localhost:5173
+
+Ctrl+C stops both. You can still run them separately (`uvicorn` + `npm run dev`).
 
 ## Frontend
 
@@ -56,7 +71,7 @@ alembic upgrade head
 
 Wait until Postgres is healthy (`docker compose ps`) before `alembic upgrade head`. Compose also starts an OpenTelemetry Collector, Jaeger, and Prometheus. Tracing is off until you set `OTEL_ENABLED=true` in `.env`.
 
-3. Run the API:
+3. Run the API (or skip this and use `python run.py` from the repo root to start API + Vite):
 
 ```bash
 uvicorn backend.app:app --reload --port 8000
@@ -71,7 +86,7 @@ To export traces and metrics from the API, set `OTEL_ENABLED=true` (endpoint def
 
 Register or login (`POST /v1/auth/register` or `/v1/auth/login`) and send `Authorization: Bearer <token>` on `/v1/documents` and `/v1/chat`. In local dev the Vue app should leave `VITE_API_BASE_URL` empty so Vite proxies `/v1` to this API (see `frontend/.env.example`).
 
-See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples.
+See [docs/AGENTS.md](docs/AGENTS.md) for graphs, tools, and curl examples. Frontend agent notes: [docs/FRONTEND_CONTEXT.md](docs/FRONTEND_CONTEXT.md). Architecture Word document: [docs/Career_Intelligence_Architecture_and_System_Design.docx](docs/Career_Intelligence_Architecture_and_System_Design.docx).
 
 ## Status
 
