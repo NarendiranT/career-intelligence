@@ -51,6 +51,7 @@ const nav = [
   { label: 'Home', icon: Home, to: '/home', badge: null },
   { label: 'Upload Documents', icon: Upload, to: '/upload', badge: null },
   { label: 'My Documents', icon: FileText, to: '/documents', badge: null },
+  { label: 'Skills', icon: Sparkles, to: '/skills', badge: null },
   { label: 'Usage', icon: BarChart3, to: '/usage', badge: null },
   { label: 'Chat with Assistant', icon: MessageSquare, to: '/chat', badge: null },
   { label: 'Prepare for Interviews', icon: Mic, to: '/interview', badge: null },

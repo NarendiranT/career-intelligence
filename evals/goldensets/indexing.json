@@ -1,0 +1,18 @@
+[
+  {
+    "id": "extract_resume",
+    "doc_type": "resume",
+    "fixture": "tests/fixtures/sample_resume.txt",
+    "input": "Extract a structured resume profile from the document.",
+    "expected_output": "Name Jane Candidate. Skills include Python, FastAPI, PostgreSQL, LangGraph, and Vue. Worked at Acme Corp as Senior Software Engineer.",
+    "context_keywords": ["Jane Candidate", "Python", "Acme Corp"]
+  },
+  {
+    "id": "extract_job",
+    "doc_type": "job",
+    "fixture": "tests/fixtures/sample_jd.txt",
+    "input": "Extract a structured job description profile from the document.",
+    "expected_output": "Title Platform Engineer at Example Labs. Requires Python, FastAPI, PostgreSQL, vector search, and LLM applications.",
+    "context_keywords": ["Platform Engineer", "Example Labs", "Python"]
+  }
+]

@@ -28,6 +28,17 @@ uvicorn backend.app:app --reload --port 8000
 
 Identity: send `Authorization: Bearer <jwt>` from `POST /v1/auth/register` or `/v1/auth/login`. Documents and chat reject missing or invalid tokens with 401.
 
+## DeepEval goldenset
+
+Opt-in live scores for indexing extract and RAG retrieve/generate, using [evals/goldensets/](../evals/goldensets/) against the sample resume and JD. Default `pytest` skips these tests.
+
+```bash
+pip install -e ".[eval]"
+RUN_EVALS=1 pytest -m eval -q
+```
+
+Needs Postgres, `GROQ_API_KEY`, and the Hugging Face embedding model. The judge is the Groq router model. Thresholds are 0.5 (smoke eval, not a CI gate).
+
 ## Indexing graph
 
 `agent/indexing/graph.py`
@@ -86,8 +97,11 @@ Token tracking: each Groq structured call records prompt/completion tokens, mode
 
 Owner dashboard: `GET /v1/usage?range=30d` (`7d` | `30d` | `90d`). Response includes lifetime `total_tokens` / `by_event_type`, plus range `features`, `daily`, up to **5** `recent` activities, and `delta_percent` vs the previous window of the same length. Full activity table: `GET /v1/usage/activities?start=YYYY-MM-DD&end=YYYY-MM-DD`.
 
+Skills profile: `GET /v1/skills` unions categorized skills from every owned `resume_profiles` row (max proficiency on name match). Legacy string skills map to Other Skills / proficiency 3. Also returns `skill_summary`, `insights`, and recent document activity.
+
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8000/v1/usage?range=30d"
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/skills
 ```
 
 Auth:

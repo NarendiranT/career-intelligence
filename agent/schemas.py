@@ -1,8 +1,26 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+SkillCategory = Literal[
+    "Programming Languages",
+    "Frameworks & Libraries",
+    "Cloud & DevOps",
+    "AI / Machine Learning",
+    "Databases & Storage",
+    "Other Skills",
+]
+
+SKILL_CATEGORIES: tuple[SkillCategory, ...] = (
+    "Programming Languages",
+    "Frameworks & Libraries",
+    "Cloud & DevOps",
+    "AI / Machine Learning",
+    "Databases & Storage",
+    "Other Skills",
+)
 
 
 class ExperienceItem(BaseModel):
@@ -18,13 +36,36 @@ class EducationItem(BaseModel):
     dates: str | None = None
 
 
+class ResumeSkill(BaseModel):
+    name: str
+    category: SkillCategory = "Other Skills"
+    proficiency: int = Field(default=3, ge=1, le=5)
+
+
 class ResumeProfile(BaseModel):
     name: str | None = None
     headline: str | None = None
-    skills: list[str] = Field(default_factory=list)
+    skills: list[ResumeSkill] = Field(default_factory=list)
     experience: list[ExperienceItem] = Field(default_factory=list)
     education: list[EducationItem] = Field(default_factory=list)
     summary: str | None = None
+    skill_summary: str | None = None
+    insights: list[str] = Field(default_factory=list)
+
+    @field_validator("skills", mode="before")
+    @classmethod
+    def coerce_skills(cls, value: Any) -> Any:
+        if not isinstance(value, list):
+            return value
+        items: list[Any] = []
+        for item in value:
+            if isinstance(item, str):
+                name = item.strip()
+                if name:
+                    items.append({"name": name})
+            else:
+                items.append(item)
+        return items
 
 
 class JobProfile(BaseModel):

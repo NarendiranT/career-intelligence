@@ -55,7 +55,7 @@ def save_resume_profile(*, user_id: uuid.UUID, document_id: uuid.UUID, profile: 
             db.add(row)
         row.name = parsed.name
         row.headline = parsed.headline
-        row.skills = parsed.skills
+        row.skills = payload.get("skills") or []
         row.payload = payload
         db.flush()
         return {"id": str(row.id), "document_id": str(document_id)}

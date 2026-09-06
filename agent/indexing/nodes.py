@@ -120,7 +120,13 @@ def process_resume(state: IndexingState) -> dict[str, Any]:
             (
                 "system",
                 "Extract a structured resume profile. Use only facts present in the document. "
-                "Leave fields empty rather than inventing them.",
+                "Leave fields empty rather than inventing them. "
+                "skills: only technologies and competencies named in the resume. Each skill has "
+                "name, category (Programming Languages, Frameworks & Libraries, Cloud & DevOps, "
+                "AI / Machine Learning, Databases & Storage, or Other Skills), and proficiency 1-5 "
+                "inferred from evidence (1=familiar, 3=intermediate, 5=expert). Do not invent skills. "
+                "skill_summary: one sentence about the candidate's strengths. "
+                "insights: up to 5 short bullets grounded in the resume.",
             ),
             ("human", truncate_text(state.get("raw_text") or "", EXTRACT_DOCUMENT_CHARS)),
         ],

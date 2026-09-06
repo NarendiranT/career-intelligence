@@ -21,11 +21,17 @@ def truncate_text(text: str, max_chars: int) -> str:
     return value[: max_chars - 1].rstrip() + "…"
 
 
+def skill_label(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("name") or "").strip()
+    return str(item or "").strip()
+
+
 def compact_profiles(profiles: dict[str, Any] | None) -> str:
     data = profiles or {}
     lines: list[str] = []
     for resume in data.get("resumes") or []:
-        skills = ", ".join(str(item) for item in (resume.get("skills") or [])[:24])
+        skills = ", ".join(label for item in (resume.get("skills") or [])[:24] if (label := skill_label(item)))
         lines.append(
             f"Resume {resume.get('filename') or resume.get('document_id')}: "
             f"name={resume.get('name') or ''}; headline={resume.get('headline') or ''}; "
@@ -37,7 +43,7 @@ def compact_profiles(profiles: dict[str, Any] | None) -> str:
                 f"  - {exp.get('title') or ''} at {exp.get('company') or ''}: {truncate_text(highlights, 240)}"
             )
     for job in data.get("jobs") or []:
-        skills = ", ".join(str(item) for item in (job.get("skills") or [])[:24])
+        skills = ", ".join(label for item in (job.get("skills") or [])[:24] if (label := skill_label(item)))
         reqs = "; ".join(str(item) for item in (job.get("requirements") or [])[:10])
         lines.append(
             f"Job {job.get('filename') or job.get('document_id')}: "

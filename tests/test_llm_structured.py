@@ -1,6 +1,6 @@
 from agent.context_budget import compact_chunks, compact_profiles, truncate_text
 from agent.llm import chat_model_kwargs, invoke_structured, invoke_structured_tracked
-from agent.schemas import QueryPlan
+from agent.schemas import QueryPlan, ResumeProfile
 from agent.usage import extract_token_usage, summarize_usage
 
 
@@ -131,5 +131,27 @@ def test_compact_context_stays_small():
     }
     text = compact_chunks(chunks) + compact_profiles(profiles)
     assert len(text) < 8000
+    assert "Python" in compact_profiles(
+        {
+            "resumes": [
+                {
+                    "filename": "resume.txt",
+                    "name": "Ada",
+                    "skills": [{"name": "Python", "category": "Programming Languages", "proficiency": 5}],
+                    "summary": "s",
+                }
+            ],
+            "jobs": [],
+        }
+    )
     assert truncate_text("abcdef", 4).endswith("…")
     assert len(truncate_text("abcdef", 4)) == 4
+
+
+def test_resume_profile_coerces_string_skills():
+    profile = ResumeProfile(name="Jane Candidate", skills=["Python", "FastAPI"])
+    dumped = profile.model_dump()
+    assert dumped["skills"] == [
+        {"name": "Python", "category": "Other Skills", "proficiency": 3},
+        {"name": "FastAPI", "category": "Other Skills", "proficiency": 3},
+    ]

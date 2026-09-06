@@ -1,0 +1,30 @@
+[
+  {
+    "id": "resume_skills",
+    "input": "What skills are listed on the resume?",
+    "expected_output": "Python, FastAPI, PostgreSQL, LangGraph, and Vue.",
+    "context_keywords": ["Python", "FastAPI", "Vue"],
+    "include_job": false
+  },
+  {
+    "id": "resume_employer",
+    "input": "Where did Jane Candidate work and what was her title?",
+    "expected_output": "Senior Software Engineer at Acme Corp.",
+    "context_keywords": ["Acme Corp", "Senior Software Engineer"],
+    "include_job": false
+  },
+  {
+    "id": "job_requirements",
+    "input": "What does the Platform Engineer job at Example Labs require?",
+    "expected_output": "Python, FastAPI, PostgreSQL, vector search, and experience with LLM applications.",
+    "context_keywords": ["Platform Engineer", "PostgreSQL", "LLM"],
+    "include_job": true
+  },
+  {
+    "id": "resume_job_match",
+    "input": "How does Jane's resume match the Platform Engineer job?",
+    "expected_output": "Jane has Python, FastAPI, PostgreSQL, and retrieval or LLM-related experience that matches the Platform Engineer requirements.",
+    "context_keywords": ["Python", "Acme", "Platform Engineer"],
+    "include_job": true
+  }
+]

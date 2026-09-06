@@ -178,3 +178,29 @@ class HomeSummaryOut(BaseModel):
     stats: HomeStatsOut
     conversations: list[ConversationOut]
     saved_results: list[ConversationOut] = Field(default_factory=list)
+
+
+class SkillItemOut(BaseModel):
+    name: str
+    proficiency: int
+
+
+class SkillCategoryOut(BaseModel):
+    name: str
+    skills: list[SkillItemOut] = Field(default_factory=list)
+
+
+class SkillActivityOut(BaseModel):
+    kind: str
+    label: str
+    detail: str = ""
+    created_at: datetime | None = None
+
+
+class SkillsSummaryOut(BaseModel):
+    resume_count: int = 0
+    total_skills: int = 0
+    skill_summary: str = ""
+    insights: list[str] = Field(default_factory=list)
+    categories: list[SkillCategoryOut] = Field(default_factory=list)
+    recent_activity: list[SkillActivityOut] = Field(default_factory=list)

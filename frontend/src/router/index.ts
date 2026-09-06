@@ -8,6 +8,7 @@ import HomeView from '@/views/HomeView.vue'
 import UploadView from '@/views/UploadView.vue'
 import DocumentsView from '@/views/DocumentsView.vue'
 import UsageView from '@/views/UsageView.vue'
+import SkillsView from '@/views/SkillsView.vue'
 import ChatView from '@/views/ChatView.vue'
 import InterviewView from '@/views/InterviewView.vue'
 import MaintenanceView from '@/views/MaintenanceView.vue'
@@ -31,6 +32,7 @@ const router = createRouter({
     { path: '/upload', name: 'upload', component: UploadView, meta: { title: 'Upload Documents', requiresAuth: true } },
     { path: '/documents', name: 'documents', component: DocumentsView, meta: { title: 'My Documents', requiresAuth: true } },
     { path: '/usage', name: 'usage', component: UsageView, meta: { title: 'Usage', requiresAuth: true } },
+    { path: '/skills', name: 'skills', component: SkillsView, meta: { title: 'Skills', requiresAuth: true } },
     { path: '/analysis', redirect: '/usage' },
     { path: '/chat', name: 'chat', component: ChatView, meta: { title: 'Chat with Assistant', requiresAuth: true } },
     { path: '/interview', name: 'interview', component: InterviewView, meta: { title: 'Prepare for Interviews', requiresAuth: true } },
