@@ -35,6 +35,9 @@ def build_registry() -> ToolRegistry:
     registry.register("fetch_document_metadata", rag_tools.fetch_document_metadata)
     registry.register("fetch_structured_profiles", rag_tools.fetch_structured_profiles)
     registry.register("save_conversation_message", rag_tools.save_conversation_message)
+    registry.register("get_interview_topic", rag_tools.get_interview_topic)
+    registry.register("list_interview_topics_for_source", rag_tools.list_interview_topics_for_source)
+    registry.register("save_interview_topics", rag_tools.save_interview_topics)
     registry.register("update_usage", rag_tools.update_usage)
     registry.register("web_search", rag_tools.web_search)
     return registry

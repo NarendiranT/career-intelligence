@@ -1,4 +1,5 @@
-from agent.llm import invoke_structured, invoke_structured_tracked
+from agent.context_budget import compact_chunks, compact_profiles, truncate_text
+from agent.llm import chat_model_kwargs, invoke_structured, invoke_structured_tracked
 from agent.schemas import QueryPlan
 from agent.usage import extract_token_usage, summarize_usage
 
@@ -111,3 +112,24 @@ def test_invoke_structured_tracked_reads_raw_usage():
     assert usage["input_tokens"] == 11
     assert usage["output_tokens"] == 4
     assert usage["latency_ms"] >= 0
+
+
+def test_chat_model_kwargs_always_sets_max_tokens():
+    router = chat_model_kwargs(role="router")
+    assert router["max_tokens"] == 768
+    assert router["reasoning_effort"] == "low"
+    generation = chat_model_kwargs(role="generation", max_tokens=4096, top_p=0.9)
+    assert generation["max_tokens"] == 1536
+    assert generation["model_kwargs"]["top_p"] == 0.9
+
+
+def test_compact_context_stays_small():
+    chunks = [{"filename": "resume.txt", "content": "x" * 4000} for _ in range(10)]
+    profiles = {
+        "resumes": [{"filename": "resume.txt", "name": "Ada", "skills": ["Python"], "summary": "s" * 2000}],
+        "jobs": [],
+    }
+    text = compact_chunks(chunks) + compact_profiles(profiles)
+    assert len(text) < 8000
+    assert truncate_text("abcdef", 4).endswith("…")
+    assert len(truncate_text("abcdef", 4)) == 4

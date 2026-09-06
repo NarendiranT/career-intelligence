@@ -18,7 +18,7 @@ Career Intelligence is intended as an AI career assistant: users upload a resume
 
 ### Current frontend scope
 
-Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Documents, and chat-with-assistant are live; interview practice is still local UI.
+Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Documents, chat-with-assistant, and interview practice are live.
 
 | Implemented UI | Backend wired? |
 | --- | --- |
@@ -29,7 +29,7 @@ Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Document
 | My Documents | Yes (`GET /v1/documents` + `WS /v1/ws/documents`) |
 | Analysis & Insights | No (coming-soon page only) |
 | Chat with assistant | Yes (`GET /v1/documents` + `WS /v1/ws/chat`; token usage on `chat.done`) |
-| Prepare for Interviews | No (local topic chat + settings; no interview API) |
+| Prepare for Interviews | Yes (`GET /v1/topics` + `WS /v1/ws/chat` with `channel=interview` / `extract_topics`) |
 
 There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api/client.ts`). Leave `VITE_API_BASE_URL` empty to use the Vite `/v1` proxy. Dashboard routes use `meta.requiresAuth`.
 
@@ -42,7 +42,7 @@ There is no Pinia/Vuex store. HTTP is a small `fetch` wrapper (`frontend/src/api
 5. **My Documents** (`/documents`): two tabs (resumes / job descriptions), search, 10-per-page pagination. Loaded from `GET /v1/documents`; status badges update over the document WebSocket.
 6. **Analysis** (`/analysis`): coming-soon placeholder.
 7. **Chat** (`/chat`): dashboard chrome. Empty thread until the user asks. Resume/JD picks load from `GET /v1/documents` (processed files only). Asking sends `chat.ask` on `WS /v1/ws/chat` with chat settings; the assistant reply streams as `chat.token` frames then `chat.done` (including token usage).
-8. **Prepare for Interviews** (`/interview`): dashboard chrome with Interview Topics in the left nav (above Settings). Topic chat is local until an interview API exists.
+8. **Prepare for Interviews** (`/interview`): dashboard chrome with Interview Topics in the left nav (above Settings). Topics come from `GET /v1/topics` (created from a chat reply). Topic chat streams on `WS /v1/ws/chat` with `channel=interview`.
 
 Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 
@@ -180,16 +180,16 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 
 - `DashboardLayout` with `show-recent-chats` and `#right` = `ChatRightPanel`.
 - Empty thread; `send()` requires a processed resume and at least one processed job, then asks the RAG agent over the chat WebSocket.
-- Chat Settings (temperature, top-p, max tokens, stream, system prompt, model) are sent with each `chat.ask`. Web search is toggled from the composer globe. Resume/JD picks are restored per conversation (`resume_id` / `job_ids` on `GET /v1/conversations/{id}` plus `localStorage`). Sources open `GET /v1/documents/{id}/file` in the sample PDF modal.
+- Chat Settings (temperature, top-p, max tokens, stream, system prompt, model) are sent with each `chat.ask`. Web search is toggled from the composer globe. Resume/JD picks are restored per conversation (`resume_id` / `job_ids` on `GET /v1/conversations/{id}` plus `localStorage`). Sources open `GET /v1/documents/{id}/file` in the sample PDF modal. Finished assistant replies have **Prepare for interview**, which sends `channel=extract_topics` and then navigates to `/interview`.
 - **Status:** Wired to documents list + `WS /v1/ws/chat`.
 
 ### `/interview` — `interview` — `frontend/src/views/InterviewView.vue`
 
 - `DashboardLayout` with `show-interview-topics` and `#right` = `InterviewRightPanel`.
-- Left sidebar **Interview Topics** sit **above** Settings / Help (not below them). Topics come from `useInterview()`.
-- Main: topic title, Change Topic menu, seeded Python list-vs-tuple thread (table + code). Other topics start with a greeting.
-- Right: Practice / Mock, response style, difficulty, toggles, session context, Clear Chat.
-- **Status:** UI complete as a demo; `send()` is local (no interview API).
+- Left sidebar **Interview Topics** sit **above** Settings / Help (not below them). Topics come from `GET /v1/topics` via `useInterview()`. Each topic shows a practiced-question count (user interview messages), capped at **99+**.
+- Main: topic title, Change Topic menu, empty state that points back to chat when the user has no topics. Messages load from the topic’s interview conversation.
+- Right: Practice / Mock, response style, difficulty, toggles, Clear Chat. Those settings compile into `system_prompt` on each `chat.ask`.
+- **Status:** Wired to `GET /v1/topics` + `WS /v1/ws/chat` (`channel=interview`).
 
 ### `/maintenance` — `maintenance` — `frontend/src/views/MaintenanceView.vue`
 
@@ -221,7 +221,7 @@ Uses `useSidebar()`. Viewport: `h-dvh overflow-hidden`. Left nav + top bar + mai
 
 **`AppSidebar.vue`**  
 Props: `collapsed`, `showRecentChats`, `showInterviewTopics`, `recentChats?`, `activeConversationId?`. Emit: `toggle`, `selectConversation`, `newChat`.  
-Nav items listed above. Active state: `route.path === item.to`. Collapsed width `w-16`, expanded `w-64`. Collapsed logo: hover shows `PanelLeftOpen`, click expands. Expanded: `PanelLeftClose` next to brand. Chat-only recent chats come from `GET /v1/conversations` and highlight the open thread. **New Chat** clears the thread. On `/interview`, Interview Topics (search + list from `useInterview`) render **above** Settings / Help.
+Nav items listed above. Active state: `route.path === item.to`. Collapsed width `w-16`, expanded `w-64`. Collapsed logo: hover shows `PanelLeftOpen`, click expands. Expanded: `PanelLeftClose` next to brand. Chat-only recent chats come from `GET /v1/conversations` and highlight the open thread. **New Chat** clears the thread. On `/interview`, Interview Topics (search + list from `useInterview`) render **above** Settings / Help. Each topic badge is `question_count` from `GET /v1/topics` (user messages in that topic’s interview conversation), displayed as `0`–`99` or `99+`.
 
 **`AppTopBar.vue`**  
 No props. Bell (decorative red dot) and the authenticated user’s name/initials from `useAuth`. Dropdown: **Log out** (clears JWT, `POST /v1/auth/logout`, then `/signin`).
@@ -262,7 +262,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`InterviewComposer.vue`** — follow-up placeholder, plus/paperclip (no handlers), model select, labeled Send.
 
-**`InterviewRightPanel.vue`** — mode, style, difficulty, three checkboxes, session context, clear chat, pro tip.
+**`InterviewRightPanel.vue`** — mode, style, difficulty, three checkboxes, clear chat, pro tip.
 
 **`ChatRightPanel.vue`** — `defineModel`s: `tab`, `resumeId`, `jobIds`, `temperature`, `topP`, `maxTokens`, `model`, `stream`, `systemPrompt`. Props: `documents: ApiDocument[]`, `loading?`. Emit: `ask(question: string)`. Processed resumes and jobs from `GET /v1/documents`. Tabs: Selected Documents | Chat Settings. Web search lives on the composer globe, not in settings. Extra models in the settings dropdown are disabled.
 
@@ -611,6 +611,12 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 - Optional citation/sources, structured strengths/gaps (already rendered if present)
 - Attachments / web search flags if those buttons become real
 
+### Interview topics (implemented)
+
+- `GET /v1/topics` — owner topics with `conversation_id` and `question_count` (user messages in that interview thread)
+- `GET /v1/topics/{id}` — same plus context / resume / jobs
+- Sidebar and Change Topic menu display the count as `0`–`99` or `99+`
+
 **Assumption:** REST + optional SSE is enough; nothing in the frontend commits to a protocol.
 
 ---
@@ -658,5 +664,4 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 
 ### Suggested next backend-facing tasks
 
-- Wire interview practice to an API
-- Persist and restore chat conversations in the sidebar
+- True token streaming from Groq (chat still slices the finished answer)

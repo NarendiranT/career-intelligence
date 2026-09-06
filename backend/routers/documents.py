@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 import uuid
 from pathlib import Path
 from uuid import UUID
@@ -10,6 +11,7 @@ from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from agent.indexing.graph import indexing_graph
+from agent.indexing.loaders import extract_text
 from backend.api_schemas import DocumentOut
 from backend.config import settings
 from backend.db import get_db
@@ -25,6 +27,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/documents", tags=["documents"])
 
 ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt", ".doc"}
+GENERIC_MEDIA_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
+
+
+def _media_type(doc: Document) -> str:
+    mime = (doc.mime or "").strip()
+    if mime and mime.lower() not in GENERIC_MEDIA_TYPES:
+        return mime
+    guessed, _ = mimetypes.guess_type(doc.filename)
+    by_suffix = {
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+    }
+    return guessed or by_suffix.get(Path(doc.filename).suffix.lower()) or "application/octet-stream"
+
+
+def _owned_document(db: Session, user_id: UUID, document_id: UUID) -> Document:
+    doc = db.exec(
+        select(Document).where(Document.id == document_id, Document.user_id == user_id)
+    ).first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    return doc
 
 
 def _run_indexing(user_id: UUID, document_id: UUID) -> None:
@@ -120,20 +146,36 @@ def get_document_file(
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_user_id),
 ) -> FileResponse:
-    doc = db.exec(
-        select(Document).where(Document.id == document_id, Document.user_id == user_id)
-    ).first()
-    if doc is None:
-        raise HTTPException(status_code=404, detail="document not found")
+    doc = _owned_document(db, user_id, document_id)
     path = Path(doc.storage_path)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="file not found")
     return FileResponse(
         path,
-        media_type=doc.mime or "application/octet-stream",
+        media_type=_media_type(doc),
         filename=doc.filename,
         content_disposition_type="inline",
     )
+
+
+@router.get("/{document_id}/text")
+def get_document_text(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_user_id),
+) -> dict[str, str]:
+    doc = _owned_document(db, user_id, document_id)
+    path = Path(doc.storage_path)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="file not found")
+    try:
+        text = extract_text(path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Could not extract text for %s", document_id)
+        raise HTTPException(status_code=400, detail="could not extract text") from None
+    return {"filename": doc.filename, "text": text}
 
 
 @router.delete("/{document_id}", status_code=204)

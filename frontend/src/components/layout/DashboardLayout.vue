@@ -16,6 +16,8 @@ defineProps<{
 defineEmits<{
   selectConversation: [id: string]
   newChat: []
+  bookmarkConversation: [id: string, bookmarked: boolean]
+  deleteConversation: [id: string]
 }>()
 
 const slots = useSlots()
@@ -34,6 +36,8 @@ const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useSidebar()
       @toggle="toggleLeft"
       @select-conversation="$emit('selectConversation', $event)"
       @new-chat="$emit('newChat')"
+      @bookmark-conversation="(id, bookmarked) => $emit('bookmarkConversation', id, bookmarked)"
+      @delete-conversation="$emit('deleteConversation', $event)"
     />
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">

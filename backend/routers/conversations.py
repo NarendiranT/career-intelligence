@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 
-from backend.api_schemas import ConversationDetailOut, ConversationOut
+from backend.api_schemas import ConversationBookmarkIn, ConversationDetailOut, ConversationOut
 from backend.conversation_service import (
     SIDEBAR_CONVERSATION_LIMIT,
     conversation_document_context,
     conversation_to_out,
     get_owned_conversation,
-    list_user_conversations,
+    list_sidebar_conversations,
     message_to_out,
+    set_conversation_bookmarked,
 )
 from backend.db import get_db
 from backend.deps import get_user_id
@@ -26,7 +27,7 @@ def list_conversations(
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_user_id),
 ) -> list[ConversationOut]:
-    return list_user_conversations(db, user_id, limit=SIDEBAR_CONVERSATION_LIMIT)
+    return list_sidebar_conversations(db, user_id, recent_limit=SIDEBAR_CONVERSATION_LIMIT)
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetailOut)
@@ -48,7 +49,42 @@ def get_conversation(
         id=summary.id,
         title=summary.title,
         updated_at=summary.updated_at,
+        bookmarked=summary.bookmarked,
         resume_id=resume_id,
         job_ids=job_ids,
         messages=[message_to_out(row) for row in rows],
     )
+
+
+@router.patch("/{conversation_id}", response_model=ConversationOut)
+def bookmark_conversation(
+    conversation_id: UUID,
+    body: ConversationBookmarkIn,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_user_id),
+) -> ConversationOut:
+    convo = get_owned_conversation(db, user_id, conversation_id)
+    if convo is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    set_conversation_bookmarked(convo, body.bookmarked)
+    db.add(convo)
+    db.commit()
+    db.refresh(convo)
+    messages = db.exec(
+        select(Message).where(Message.conversation_id == convo.id).order_by(Message.created_at.asc())
+    ).all()
+    return conversation_to_out(convo, list(messages))
+
+
+@router.delete("/{conversation_id}", status_code=204)
+def delete_conversation(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_user_id),
+) -> Response:
+    convo = get_owned_conversation(db, user_id, conversation_id)
+    if convo is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    db.delete(convo)
+    db.commit()
+    return Response(status_code=204)

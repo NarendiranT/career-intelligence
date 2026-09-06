@@ -85,7 +85,13 @@ onUnmounted(() => {
           <p class="text-sm font-medium text-slate-700">Preview isn’t available for this file type.</p>
           <p class="text-sm text-slate-500">Open the file to view it in a new tab.</p>
         </div>
-        <iframe v-else class="min-h-[70vh] w-full flex-1 bg-slate-100" :src="src" :title="title" />
+          <iframe
+          v-else
+          :key="src"
+          class="min-h-[70vh] w-full flex-1 bg-slate-100"
+          :src="src"
+          :title="title"
+        />
       </div>
     </div>
   </Teleport>

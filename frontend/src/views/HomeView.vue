@@ -28,6 +28,7 @@ const loading = ref(true)
 const error = ref('')
 const documents = ref<HomeDocument[]>([])
 const conversations = ref<HomeConversation[]>([])
+const savedResults = ref<HomeConversation[]>([])
 const stats = ref<HomeStats>({ ...emptyStats })
 
 function kindLabel(doc: HomeDocument): string {
@@ -46,11 +47,13 @@ async function loadHome(): Promise<void> {
     const summary = await fetchHomeSummary()
     documents.value = summary.documents
     conversations.value = summary.conversations
+    savedResults.value = summary.saved_results ?? []
     stats.value = summary.stats
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load home.'
     documents.value = []
     conversations.value = []
+    savedResults.value = []
     stats.value = { ...emptyStats }
   } finally {
     loading.value = false
@@ -264,6 +267,36 @@ onMounted(() => {
                 <p class="text-[12px] font-medium text-slate-500">Saved Results</p>
               </div>
             </div>
+          </div>
+
+          <div id="saved-results" class="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+            <div class="mb-3 flex items-center justify-between">
+              <h2 class="text-base font-bold text-slate-800">Saved Results</h2>
+              <RouterLink to="/chat" class="text-sm font-semibold text-brand hover:underline">Open chat</RouterLink>
+            </div>
+            <p v-if="loading" class="flex items-center gap-2 text-sm text-slate-400">
+              <LoaderCircle class="h-4 w-4 animate-spin" />
+              Loading saved results…
+            </p>
+            <p v-else-if="!savedResults.length" class="text-sm text-slate-400">
+              Bookmark a chat to save it here.
+            </p>
+            <ul v-else class="space-y-1">
+              <li v-for="chat in savedResults" :key="chat.id">
+                <RouterLink
+                  :to="{ path: '/chat', query: { conversation: chat.id } }"
+                  class="flex items-start gap-3 rounded-xl px-1 py-2 hover:bg-orange-50"
+                >
+                  <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
+                    <Bookmark class="h-4 w-4 fill-current" />
+                  </span>
+                  <span class="min-w-0">
+                    <p class="truncate text-[13px] font-medium text-slate-700">{{ chat.title }}</p>
+                    <p class="text-[11px] text-slate-400">{{ formatRelativeTime(chat.updated_at) }}</p>
+                  </span>
+                </RouterLink>
+              </li>
+            </ul>
           </div>
 
           <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">

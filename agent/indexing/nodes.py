@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sqlmodel import select
 
+from agent.context_budget import EXTRACT_DOCUMENT_CHARS, truncate_text
 from agent.indexing.loaders import extract_text
 from agent.llm import get_chat_model, get_embeddings, invoke_structured_tracked
 from agent.schemas import DocumentClassification, JobProfile, ResumeProfile
@@ -80,7 +81,7 @@ def route_document(state: IndexingState) -> dict[str, Any]:
         return {"doc_type": hinted}
 
     llm = get_chat_model(role="router")
-    snippet = (state.get("raw_text") or "")[:4000]
+    snippet = truncate_text(state.get("raw_text") or "", 4000)
     result, usage = invoke_structured_tracked(
         llm,
         DocumentClassification,
@@ -121,7 +122,7 @@ def process_resume(state: IndexingState) -> dict[str, Any]:
                 "Extract a structured resume profile. Use only facts present in the document. "
                 "Leave fields empty rather than inventing them.",
             ),
-            ("human", state.get("raw_text") or ""),
+            ("human", truncate_text(state.get("raw_text") or "", EXTRACT_DOCUMENT_CHARS)),
         ],
         event_type="indexing.extract_resume",
     )
@@ -147,7 +148,7 @@ def process_job(state: IndexingState) -> dict[str, Any]:
                 "system",
                 "Extract a structured job description profile. Use only facts present in the document.",
             ),
-            ("human", state.get("raw_text") or ""),
+            ("human", truncate_text(state.get("raw_text") or "", EXTRACT_DOCUMENT_CHARS)),
         ],
         event_type="indexing.extract_job",
     )

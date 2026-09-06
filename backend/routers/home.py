@@ -10,7 +10,7 @@ from backend.api_schemas import HomeStatsOut, HomeSummaryOut
 from backend.conversation_service import RECENT_CONVERSATION_LIMIT, list_user_conversations
 from backend.db import get_db
 from backend.deps import get_user_id
-from backend.models import Document, DocType, Message, MessageRole
+from backend.models import Conversation, Document, DocType, Message, MessageRole
 from backend.serializers import document_to_out
 
 router = APIRouter(prefix="/v1/home", tags=["home"])
@@ -33,6 +33,11 @@ def home_summary(
         .select_from(Message)
         .where(Message.user_id == user_id, Message.role == MessageRole.assistant)
     ).one()
+    saved_result_count = db.exec(
+        select(func.count())
+        .select_from(Conversation)
+        .where(Conversation.user_id == user_id, Conversation.bookmarked.is_(True))
+    ).one()
 
     return HomeSummaryOut(
         documents=[document_to_out(row) for row in documents[:RECENT_DOCUMENT_LIMIT]],
@@ -40,7 +45,10 @@ def home_summary(
             resume_count=resume_count,
             job_count=job_count,
             insight_count=int(insight_count or 0),
-            saved_result_count=0,
+            saved_result_count=int(saved_result_count or 0),
         ),
         conversations=list_user_conversations(db, user_id, limit=RECENT_CONVERSATION_LIMIT),
+        saved_results=list_user_conversations(
+            db, user_id, limit=RECENT_CONVERSATION_LIMIT, bookmarked=True
+        ),
     )

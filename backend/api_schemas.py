@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -30,6 +30,35 @@ class ChatRequest(BaseModel):
     system_prompt: str = ""
     web_search: bool = False
     model: str = ""
+    channel: Literal["assistant", "interview", "extract_topics"] = "assistant"
+    topic_id: UUID | None = None
+    source_conversation_id: UUID | None = None
+    source_message_id: UUID | None = None
+
+
+class TopicOut(BaseModel):
+    id: UUID
+    label: str
+    slug: str
+    conversation_id: UUID | None = None
+    created_at: datetime | None = None
+    question_count: int = 0
+
+
+class TopicDetailOut(TopicOut):
+    context: dict[str, Any] | None = None
+    resume_id: UUID | None = None
+    job_ids: list[UUID] = Field(default_factory=list)
+
+
+class AnswerTableOut(BaseModel):
+    headers: list[str] = Field(default_factory=list)
+    rows: list[list[str]] = Field(default_factory=list)
+
+
+class AnswerCodeOut(BaseModel):
+    language: str = ""
+    content: str = ""
 
 
 class CitationOut(BaseModel):
@@ -50,6 +79,14 @@ class ChatResponse(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     usage: TokenUsageOut = Field(default_factory=TokenUsageOut)
+    channel: str = "assistant"
+    topic_id: UUID | None = None
+    topics: list[TopicOut] = Field(default_factory=list)
+    table: AnswerTableOut | None = None
+    code: AnswerCodeOut | None = None
+    validated: bool = False
+    message_id: UUID | None = None
+    topics_existing: bool = False
 
 
 class UsageByEventOut(BaseModel):
@@ -77,6 +114,11 @@ class ConversationOut(BaseModel):
     id: UUID
     title: str
     updated_at: datetime | None = None
+    bookmarked: bool = False
+
+
+class ConversationBookmarkIn(BaseModel):
+    bookmarked: bool
 
 
 class ConversationMessageOut(BaseModel):
@@ -98,3 +140,4 @@ class HomeSummaryOut(BaseModel):
     documents: list[DocumentOut]
     stats: HomeStatsOut
     conversations: list[ConversationOut]
+    saved_results: list[ConversationOut] = Field(default_factory=list)

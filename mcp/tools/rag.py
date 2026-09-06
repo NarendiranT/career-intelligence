@@ -29,6 +29,12 @@ def get_user_profile(*, user_id: uuid.UUID) -> dict[str, Any] | None:
 
 def fetch_structured_profiles(*, user_id: uuid.UUID, document_ids: list[uuid.UUID]) -> dict[str, Any]:
     with session_scope() as db:
+        filenames = {
+            d.id: d.filename
+            for d in db.exec(
+                select(Document).where(Document.user_id == user_id, Document.id.in_(document_ids))
+            ).all()
+        }
         resumes = db.exec(
             select(ResumeProfile).where(
                 ResumeProfile.user_id == user_id,
@@ -42,8 +48,22 @@ def fetch_structured_profiles(*, user_id: uuid.UUID, document_ids: list[uuid.UUI
             )
         ).all()
         return {
-            "resumes": [{"document_id": str(r.document_id), **(r.payload or {})} for r in resumes],
-            "jobs": [{"document_id": str(j.document_id), **(j.payload or {})} for j in jobs],
+            "resumes": [
+                {
+                    "document_id": str(r.document_id),
+                    **(r.payload or {}),
+                    "filename": filenames.get(r.document_id) or "",
+                }
+                for r in resumes
+            ],
+            "jobs": [
+                {
+                    "document_id": str(j.document_id),
+                    **(j.payload or {}),
+                    "filename": filenames.get(j.document_id) or "",
+                }
+                for j in jobs
+            ],
         }
 
 
@@ -126,6 +146,60 @@ def update_usage(
         db.add(event)
         db.flush()
         return {"id": str(event.id)}
+
+
+def get_interview_topic(*, user_id: uuid.UUID, topic_id: uuid.UUID) -> dict[str, Any] | None:
+    from backend.topic_service import (
+        conversation_for_topic,
+        get_owned_topic,
+        question_counts_by_conversation,
+        topic_to_detail,
+    )
+
+    with session_scope() as db:
+        topic = get_owned_topic(db, user_id, topic_id)
+        if topic is None:
+            return None
+        conversation = conversation_for_topic(db, topic.id)
+        question_count = 0
+        if conversation is not None:
+            question_count = question_counts_by_conversation(db, [conversation.id]).get(conversation.id, 0)
+        detail = topic_to_detail(topic, conversation, question_count)
+        return detail.model_dump(mode="json")
+
+
+def list_interview_topics_for_source(
+    *,
+    user_id: uuid.UUID,
+    source_message_id: uuid.UUID | None = None,
+) -> list[dict[str, Any]]:
+    from backend.topic_service import topic_payloads, topics_for_source_message
+
+    with session_scope() as db:
+        topics = topics_for_source_message(db, user_id, source_message_id)
+        return topic_payloads(db, topics)
+
+
+def save_interview_topics(
+    *,
+    user_id: uuid.UUID,
+    labels: list[str],
+    source_conversation_id: uuid.UUID | None = None,
+    source_message_id: uuid.UUID | None = None,
+    context: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    from backend.topic_service import create_topics_from_labels, topic_payloads
+
+    with session_scope() as db:
+        topics = create_topics_from_labels(
+            db,
+            user_id=user_id,
+            labels=labels,
+            source_conversation_id=source_conversation_id,
+            source_message_id=source_message_id,
+            context=context or {},
+        )
+        return topic_payloads(db, topics)
 
 
 def web_search(*, query: str, enabled: bool = False) -> list[dict[str, Any]]:

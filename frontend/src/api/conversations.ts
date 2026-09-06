@@ -8,3 +8,14 @@ export function listConversations(): Promise<ConversationSummary[]> {
 export function getConversation(id: string): Promise<ConversationDetail> {
   return apiFetch<ConversationDetail>(`/v1/conversations/${id}`)
 }
+
+export function bookmarkConversation(id: string, bookmarked: boolean): Promise<ConversationSummary> {
+  return apiFetch<ConversationSummary>(`/v1/conversations/${id}`, {
+    method: 'PATCH',
+    json: { bookmarked },
+  })
+}
+
+export function deleteConversation(id: string): Promise<void> {
+  return apiFetch<void>(`/v1/conversations/${id}`, { method: 'DELETE' })
+}

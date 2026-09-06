@@ -8,6 +8,7 @@ export type HomeConversation = {
   id: string
   title: string
   updated_at: string | null
+  bookmarked?: boolean
 }
 
 export type HomeStats = {
@@ -21,4 +22,5 @@ export type HomeSummary = {
   documents: HomeDocument[]
   stats: HomeStats
   conversations: HomeConversation[]
+  saved_results: HomeConversation[]
 }

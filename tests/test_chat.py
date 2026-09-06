@@ -78,6 +78,8 @@ def test_chat_websocket_streams_tokens(monkeypatch):
             assert done["gaps"] == ["Kubernetes"]
             assert done["citations"][0]["label"] == "resume.txt"
             assert done["conversation_id"]
+            assert done["validated"] is False
+            assert done.get("message_id") is None
 
     body = captured["body"]
     assert body.temperature == 0.4
@@ -158,3 +160,85 @@ def test_chat_rest_passes_settings(monkeypatch):
     assert captured["body"].temperature == 1.2
     assert captured["body"].web_search is True
     assert captured["body"].system_prompt == "Stay grounded."
+
+
+@requires_postgres
+def test_chat_websocket_interview_and_extract_channels(monkeypatch):
+    captured: dict = {}
+
+    def fake_invoke(user_id, body: ChatRequest):
+        captured["body"] = body
+        if body.channel == "extract_topics":
+            return {
+                "channel": "extract_topics",
+                "conversation_id": str(body.source_conversation_id) if body.source_conversation_id else None,
+                "topics": [{"id": str(uuid.uuid4()), "label": "Python", "slug": "python"}],
+                "answer": {"text": "Created interview topics: Python", "citations": [], "strengths": [], "gaps": []},
+            }
+        return {
+            "channel": "interview",
+            "topic_id": str(body.topic_id) if body.topic_id else None,
+            "conversation_id": str(uuid.uuid4()),
+            "answer": {
+                "text": "Lists are mutable.",
+                "citations": [],
+                "strengths": [],
+                "gaps": [],
+                "table": {"headers": ["Feature", "List"], "rows": [["Mutability", "Mutable"]]},
+                "code": {"language": "python", "content": "xs = []"},
+            },
+        }
+
+    monkeypatch.setattr("backend.routers.ws.invoke_rag", fake_invoke)
+
+    with TestClient(app) as ws_client:
+        token = ws_client.post(
+            "/v1/auth/register",
+            json={
+                "full_name": "Ada Lovelace",
+                "email": f"{uuid.uuid4()}@example.com",
+                "password": "Passw0rd!",
+            },
+        ).json()["access_token"]
+        topic_id = str(uuid.uuid4())
+        with ws_client.websocket_connect(f"/v1/ws/chat?token={token}") as websocket:
+            websocket.send_json(
+                {
+                    "type": "chat.ask",
+                    "question": "Explain lists",
+                    "channel": "interview",
+                    "topic_id": topic_id,
+                    "stream": True,
+                    "system_prompt": "You are a practice coach for Python.",
+                }
+            )
+            assert websocket.receive_json()["type"] == "chat.status"
+            done = None
+            while True:
+                event = websocket.receive_json()
+                if event["type"] == "chat.token":
+                    continue
+                if event["type"] == "chat.done":
+                    done = event
+                    break
+                raise AssertionError(event)
+            assert done["text"] == "Lists are mutable."
+            assert done["table"]["headers"] == ["Feature", "List"]
+            assert done["code"]["language"] == "python"
+            assert captured["body"].channel == "interview"
+            assert str(captured["body"].topic_id) == topic_id
+
+            websocket.send_json(
+                {
+                    "type": "chat.ask",
+                    "question": "Python is a strength on your resume.",
+                    "channel": "extract_topics",
+                    "stream": False,
+                    "source_conversation_id": str(uuid.uuid4()),
+                }
+            )
+            assert websocket.receive_json()["type"] == "chat.status"
+            extracted = websocket.receive_json()
+            assert extracted["type"] == "chat.done"
+            assert extracted["topics"][0]["label"] == "Python"
+            assert captured["body"].channel == "extract_topics"

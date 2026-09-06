@@ -15,6 +15,9 @@ def test_tool_registry_has_diagram_names():
         "get_user_profile",
         "fetch_document_metadata",
         "save_conversation_message",
+        "get_interview_topic",
+        "list_interview_topics_for_source",
+        "save_interview_topics",
         "update_usage",
         "web_search",
     ):

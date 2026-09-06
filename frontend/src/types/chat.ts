@@ -23,20 +23,44 @@ export type ChatMessage = {
   gaps?: string[]
   sources?: ChatSource[]
   usage?: ChatUsage
+  validated?: boolean
+  topics?: ChatTopic[]
 }
 
 export type ChatAskPayload = {
   question: string
-  resume_id: string | null
-  job_ids: string[]
-  conversation_id: string | null
-  stream: boolean
-  temperature: number
-  top_p: number
-  max_tokens: number
-  system_prompt: string
-  web_search: boolean
-  model: string
+  resume_id?: string | null
+  job_ids?: string[]
+  conversation_id?: string | null
+  stream?: boolean
+  temperature?: number
+  top_p?: number
+  max_tokens?: number
+  system_prompt?: string
+  web_search?: boolean
+  model?: string
+  channel?: 'assistant' | 'interview' | 'extract_topics'
+  topic_id?: string | null
+  source_conversation_id?: string | null
+  source_message_id?: string | null
+}
+
+export type ChatTopic = {
+  id: string
+  label: string
+  slug?: string
+  conversation_id?: string | null
+  question_count?: number
+}
+
+export type ChatTable = {
+  headers: string[]
+  rows: string[][]
+}
+
+export type ChatCode = {
+  language: string
+  content: string
 }
 
 export type ChatDoneEvent = {
@@ -47,6 +71,14 @@ export type ChatDoneEvent = {
   strengths: string[]
   gaps: string[]
   usage?: ChatUsage
+  channel?: string
+  topic_id?: string | null
+  topics?: ChatTopic[]
+  table?: ChatTable | null
+  code?: ChatCode | null
+  validated?: boolean
+  message_id?: string | null
+  topics_existing?: boolean
 }
 
 export type ChatSocketEvent =
@@ -59,6 +91,7 @@ export type ConversationSummary = {
   id: string
   title: string
   updated_at: string | null
+  bookmarked?: boolean
 }
 
 export type ConversationMessage = {
@@ -70,6 +103,10 @@ export type ConversationMessage = {
     strengths?: string[]
     gaps?: string[]
     usage?: ChatUsage
+    table?: ChatTable
+    code?: ChatCode
+    validated?: boolean
+    topics?: ChatTopic[]
   } | null
   created_at: string | null
 }

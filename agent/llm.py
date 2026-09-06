@@ -6,6 +6,7 @@ from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from pydantic import BaseModel
 
+from agent.context_budget import EXTRACTION_MAX_TOKENS, ROUTER_MAX_TOKENS, cap_generation_max_tokens
 from agent.usage import extract_token_usage, model_name, timed_invoke, unwrap_structured
 from backend.config import settings
 from backend.errors import MissingLLMConfigError
@@ -23,6 +24,33 @@ def require_groq() -> None:
     os.environ["GROQ_API_KEY"] = key
 
 
+def chat_model_kwargs(
+    *,
+    role: ChatRole = "generation",
+    temperature: float = 0,
+    max_tokens: int | None = None,
+    top_p: float | None = None,
+) -> dict[str, Any]:
+    """Build ChatGroq kwargs. Always set max_tokens: Groq TPM counts prompt + declared max_tokens."""
+    models = {
+        "extraction": settings.extraction_model,
+        "router": settings.router_model,
+        "generation": settings.generation_model,
+    }
+    if role == "generation":
+        completion = cap_generation_max_tokens(max_tokens)
+    elif role == "extraction":
+        completion = EXTRACTION_MAX_TOKENS if max_tokens is None else min(int(max_tokens), EXTRACTION_MAX_TOKENS)
+    else:
+        completion = ROUTER_MAX_TOKENS if max_tokens is None else min(int(max_tokens), ROUTER_MAX_TOKENS)
+    kwargs: dict[str, Any] = {"model": models[role], "temperature": temperature, "max_tokens": completion}
+    if "gpt-oss" in str(models[role]):
+        kwargs["reasoning_effort"] = "low"
+    if top_p is not None:
+        kwargs["model_kwargs"] = {"top_p": top_p}
+    return kwargs
+
+
 def get_chat_model(
     *,
     role: ChatRole = "generation",
@@ -31,17 +59,7 @@ def get_chat_model(
     top_p: float | None = None,
 ) -> ChatGroq:
     require_groq()
-    models = {
-        "extraction": settings.extraction_model,
-        "router": settings.router_model,
-        "generation": settings.generation_model,
-    }
-    kwargs: dict[str, Any] = {"model": models[role], "temperature": temperature}
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
-    if top_p is not None:
-        kwargs["model_kwargs"] = {"top_p": top_p}
-    return ChatGroq(**kwargs)
+    return ChatGroq(**chat_model_kwargs(role=role, temperature=temperature, max_tokens=max_tokens, top_p=top_p))
 
 
 def _with_json_schema_hint(messages: list[Any], schema: type[BaseModel]) -> list[Any]:

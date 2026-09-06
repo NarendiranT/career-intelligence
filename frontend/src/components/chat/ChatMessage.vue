@@ -1,19 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Check, Copy, FileText, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert } from '@lucide/vue'
+import { computed, ref } from 'vue'
+import { Check, Copy, FileText, Mic, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert } from '@lucide/vue'
 import { useAuth } from '@/composables/useAuth'
 import { showToast } from '@/composables/useToast'
 import type { ChatFeedback, ChatMessage, ChatSource } from '@/types/chat'
+import type { ApiDocument } from '@/types/document'
 import { fileBadge } from '@/types/upload'
+import { sourceFileName, stripInlineCitations } from '@/utils/chatSources'
 
 const FEEDBACK_KEY = 'ci.chatFeedback'
 
 const props = defineProps<{
   message: ChatMessage
+  documents?: ApiDocument[]
+  resumeId?: string
+  jobIds?: string[]
+  preparing?: boolean
 }>()
 
 const emit = defineEmits<{
   previewSource: [source: ChatSource]
+  prepareInterview: [message: ChatMessage]
 }>()
 
 const { initials } = useAuth()
@@ -32,13 +39,30 @@ function readFeedback(): ChatFeedback | null {
 
 const feedback = ref<ChatFeedback | null>(readFeedback())
 
+const sourceCtx = () => ({
+  documents: props.documents ?? [],
+  resumeId: props.resumeId,
+  jobIds: props.jobIds,
+})
+
 function sourceName(source: ChatSource): string {
-  const label = source.label.trim() || source.id
-  return label.split(/[/\\]/).pop() || label
+  return sourceFileName(source, sourceCtx())
 }
 
+function displayText(value: string): string {
+  return stripInlineCitations(value)
+}
+
+const canPrepareInterview = computed(
+  () =>
+    props.message.role === 'assistant' &&
+    !props.message.pending &&
+    Boolean(displayText(props.message.text)) &&
+    props.message.validated === true,
+)
+
 async function copyMessage(): Promise<void> {
-  const text = props.message.text.trim()
+  const text = displayText(props.message.text)
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
@@ -116,14 +140,14 @@ function setFeedback(value: ChatFeedback): void {
       </div>
       <p v-if="message.pending && !message.text" class="text-sm text-slate-500">Thinking…</p>
       <p v-else class="text-sm leading-relaxed text-slate-800">
-        {{ message.text }}<span v-if="message.pending" class="animate-pulse">▍</span>
+        {{ displayText(message.text) }}<span v-if="message.pending" class="animate-pulse">▍</span>
       </p>
       <div v-if="message.strengths?.length" class="mt-3">
         <p class="text-sm font-semibold text-slate-800">Key Strengths</p>
         <ul class="mt-1.5 space-y-1">
           <li v-for="item in message.strengths" :key="item" class="flex items-start gap-2 text-sm text-slate-700">
             <Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-            {{ item }}
+            {{ displayText(item) }}
           </li>
         </ul>
       </div>
@@ -132,7 +156,7 @@ function setFeedback(value: ChatFeedback): void {
         <ul class="mt-1.5 space-y-1">
           <li v-for="item in message.gaps" :key="item" class="flex items-start gap-2 text-sm text-slate-700">
             <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
-            {{ item }}
+            {{ displayText(item) }}
           </li>
         </ul>
       </div>
@@ -159,6 +183,16 @@ function setFeedback(value: ChatFeedback): void {
           {{ message.usage.completion_tokens.toLocaleString() }} completion)
         </span>
       </p>
+      <button
+        v-if="canPrepareInterview"
+        class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+        type="button"
+        :disabled="preparing"
+        @click="emit('prepareInterview', message)"
+      >
+        <Mic class="h-3.5 w-3.5" />
+        {{ preparing ? 'Creating topics…' : message.topics?.length ? 'Continue interview' : 'Prepare for interview' }}
+      </button>
     </div>
   </article>
 </template>

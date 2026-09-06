@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getConversation, listConversations } from '@/api/conversations'
-import { fetchDocumentFile, listDocuments } from '@/api/documents'
+import { Bookmark, LoaderCircle, Trash2 } from '@lucide/vue'
+import { getConversation, listConversations, bookmarkConversation, deleteConversation } from '@/api/conversations'
+import { fetchDocumentFile, fetchDocumentText, listDocuments } from '@/api/documents'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
@@ -25,6 +26,7 @@ import type {
   ConversationSummary,
 } from '@/types/chat'
 import type { ApiDocument } from '@/types/document'
+import { resolveSourceDocument, sourceFileName } from '@/utils/chatSources'
 
 const CONTEXT_KEY = 'ci.chatDocumentContext'
 const ALLOWED_MODEL = 'deep-research'
@@ -57,11 +59,16 @@ const draft = ref('')
 const documents = ref<ApiDocument[]>([])
 const documentsLoading = ref(true)
 const sending = ref(false)
+const extractingTopics = ref(false)
+const extractingFromId = ref<string | null>(null)
 const conversationId = ref<string | null>(null)
 const assistantId = ref<string | null>(null)
 const messages = ref<ChatMessageType[]>([])
 const recentConversations = ref<ConversationSummary[]>([])
 const threadLoading = ref(false)
+const threadBookmarked = ref(false)
+const pendingDelete = ref<ConversationSummary | null>(null)
+const deletingChat = ref(false)
 const preview = ref<PreviewState | null>(null)
 
 const suggestions = [
@@ -146,6 +153,8 @@ function toUiMessage(message: ConversationMessage): ChatMessageType {
     gaps: extra?.gaps,
     sources: message.citations,
     usage: extra?.usage,
+    validated: extra?.validated === true,
+    topics: extra?.topics,
   }
 }
 
@@ -166,6 +175,7 @@ async function openConversation(id: string): Promise<void> {
     conversationId.value = detail.id
     messages.value = detail.messages.map(toUiMessage)
     assistantId.value = null
+    threadBookmarked.value = Boolean(detail.bookmarked)
     applyContext({
       resumeId: detail.resume_id || readStoredContext(detail.id)?.resumeId || '',
       jobIds: detail.job_ids?.length ? detail.job_ids : (readStoredContext(detail.id)?.jobIds ?? []),
@@ -185,7 +195,10 @@ async function startNewChat(updateRoute = true): Promise<void> {
   persistSelection()
   conversationId.value = null
   assistantId.value = null
+  extractingFromId.value = null
+  extractingTopics.value = false
   messages.value = []
+  threadBookmarked.value = false
   persistSelection()
   if (updateRoute && queryConversationId()) {
     await router.replace({ path: '/chat' })
@@ -196,6 +209,61 @@ function selectConversation(id: string): void {
   if (sending.value || id === queryConversationId()) return
   persistSelection()
   void router.replace({ path: '/chat', query: { conversation: id } })
+}
+
+function clearStoredContext(id: string): void {
+  try {
+    const raw = localStorage.getItem(CONTEXT_KEY)
+    if (!raw) return
+    const map = JSON.parse(raw) as Record<string, StoredChatContext>
+    delete map[id]
+    localStorage.setItem(CONTEXT_KEY, JSON.stringify(map))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+async function toggleBookmark(id: string, bookmarked: boolean): Promise<void> {
+  if (sending.value) return
+  try {
+    const updated = await bookmarkConversation(id, bookmarked)
+    recentConversations.value = recentConversations.value.map((chat) =>
+      chat.id === id ? { ...chat, bookmarked: updated.bookmarked } : chat,
+    )
+    if (conversationId.value === id) threadBookmarked.value = Boolean(updated.bookmarked)
+    showToast(updated.bookmarked ? 'Saved to results' : 'Removed from saved results', 'success', 2000)
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not update bookmark', 'error')
+  }
+}
+
+function requestDelete(id: string): void {
+  if (sending.value || deletingChat.value) return
+  const chat = recentConversations.value.find((item) => item.id === id)
+  pendingDelete.value = chat ?? { id, title: 'This conversation', updated_at: null }
+}
+
+function cancelDelete(): void {
+  if (deletingChat.value) return
+  pendingDelete.value = null
+}
+
+async function confirmDeleteChat(): Promise<void> {
+  const target = pendingDelete.value
+  if (!target || deletingChat.value) return
+  deletingChat.value = true
+  try {
+    await deleteConversation(target.id)
+    clearStoredContext(target.id)
+    recentConversations.value = recentConversations.value.filter((chat) => chat.id !== target.id)
+    pendingDelete.value = null
+    showToast('Conversation deleted', 'success', 2000)
+    if (conversationId.value === target.id) await startNewChat()
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not delete conversation', 'error')
+  } finally {
+    deletingChat.value = false
+  }
 }
 
 function pruneSelection(): void {
@@ -235,6 +303,34 @@ function onDocumentEvent(event: DocumentRealtimeEvent): void {
 useDocumentRealtime(onDocumentEvent)
 
 function onChatEvent(event: ChatSocketEvent): void {
+  if (extractingTopics.value) {
+    if (event.type === 'chat.status' || event.type === 'chat.token') return
+    extractingTopics.value = false
+    const sourceId = extractingFromId.value
+    extractingFromId.value = null
+    if (event.type === 'chat.error') {
+      showToast(event.detail, 'error')
+      return
+    }
+    const created = event.topics ?? []
+    if (!created.length) {
+      showToast('Could not create interview topics from that reply', 'error')
+      return
+    }
+    if (sourceId) {
+      const source = messages.value.find((item) => item.id === sourceId)
+      if (source) source.topics = created
+    }
+    showToast(
+      event.topics_existing
+        ? 'Interview topics already exist for this reply'
+        : `Created ${created.length} interview topic${created.length === 1 ? '' : 's'}`,
+      'success',
+      2000,
+    )
+    void router.push({ path: '/interview', query: { topic: created[0].id } })
+    return
+  }
   if (event.type === 'chat.status') return
   if (event.type === 'chat.token') {
     const id = assistantId.value
@@ -270,7 +366,9 @@ function onChatEvent(event: ChatSocketEvent): void {
     target.gaps = event.gaps
     target.sources = event.citations
     target.usage = event.usage
+    target.validated = event.validated === true
     target.time = clockTime()
+    if (event.message_id) target.id = event.message_id
   }
   assistantId.value = null
   if (event.conversation_id && queryConversationId() !== event.conversation_id) {
@@ -291,7 +389,7 @@ function scrollThread(): void {
 
 function send(text = draft.value): void {
   const value = text.trim()
-  if (!value || sending.value) return
+  if (!value || sending.value || extractingTopics.value) return
   if (!selectedResumeId.value || selectedJobIds.value.length === 0) {
     showToast('Select a processed resume and at least one job description first.', 'error')
     tab.value = 'documents'
@@ -334,6 +432,7 @@ function send(text = draft.value): void {
     system_prompt: systemPrompt.value,
     web_search: webSearch.value,
     model: ALLOWED_MODEL,
+    channel: 'assistant',
   })
   if (!ok) {
     sending.value = false
@@ -346,34 +445,94 @@ function send(text = draft.value): void {
   }
 }
 
+function prepareFromMessage(message: ChatMessageType): void {
+  if (extractingTopics.value || sending.value || !message.text.trim() || !message.validated) return
+  if (message.topics?.length) {
+    void router.push({ path: '/interview', query: { topic: message.topics[0].id } })
+    return
+  }
+  if (!connected.value) {
+    showToast('Chat is reconnecting. Try again in a moment.', 'error')
+    return
+  }
+  const extras: string[] = []
+  if (message.strengths?.length) extras.push(`Strengths: ${message.strengths.join('; ')}`)
+  if (message.gaps?.length) extras.push(`Gaps: ${message.gaps.join('; ')}`)
+  const question = extras.length ? `${message.text.trim()}\n\n${extras.join('\n')}` : message.text.trim()
+  extractingTopics.value = true
+  extractingFromId.value = message.id
+  const sourceMessageId = /^[0-9a-f-]{36}$/i.test(message.id) ? message.id : null
+  const ok = sendAsk({
+    question,
+    resume_id: selectedResumeId.value || null,
+    job_ids: selectedJobIds.value,
+    conversation_id: conversationId.value,
+    stream: true,
+    temperature: temperature.value,
+    top_p: topP.value,
+    max_tokens: maxTokens.value,
+    system_prompt: systemPrompt.value,
+    web_search: false,
+    model: ALLOWED_MODEL,
+    channel: 'extract_topics',
+    source_conversation_id: conversationId.value,
+    source_message_id: sourceMessageId,
+  })
+  if (!ok) {
+    extractingTopics.value = false
+    extractingFromId.value = null
+    showToast('Could not reach the assistant. Check that the API is running.', 'error')
+  }
+}
+
 function closePreview(): void {
   const current = preview.value
   preview.value = null
   if (current?.src.startsWith('blob:')) URL.revokeObjectURL(current.src)
 }
 
+function sourceContext() {
+  return {
+    documents: documents.value,
+    resumeId: selectedResumeId.value,
+    jobIds: selectedJobIds.value,
+  }
+}
+
 async function previewSource(source: ChatSource): Promise<void> {
-  const documentId = source.id?.trim()
+  const document = resolveSourceDocument(source, sourceContext())
+  const documentId = document?.id || null
   if (!documentId) {
-    showToast('This source is missing a document id.', 'error')
+    showToast('Could not match this source to an uploaded file.', 'error')
     return
   }
   try {
     const file = await fetchDocumentFile(documentId)
     closePreview()
     const src = URL.createObjectURL(file.blob)
-    const name = source.label.split(/[/\\]/).pop() || file.filename
+    const uploadedName = document?.filename
+    const name = uploadedName || file.filename || sourceFileName(source, sourceContext()) || documentId
     const mime = file.mime.toLowerCase()
     const isPdf = mime.includes('pdf') || name.toLowerCase().endsWith('.pdf')
-    const isText =
+    const isPlainText =
       mime.startsWith('text/') || name.toLowerCase().endsWith('.txt') || mime.includes('json')
+    const needsExtractedText =
+      !isPdf &&
+      !isPlainText &&
+      (name.toLowerCase().endsWith('.docx') || name.toLowerCase().endsWith('.doc') || mime.includes('word'))
+
     let text = ''
-    if (isText) text = await file.blob.text()
+    if (isPlainText) text = await file.blob.text()
+    else if (needsExtractedText) {
+      const extracted = await fetchDocumentText(documentId)
+      text = extracted.text
+    }
+
     preview.value = {
       title: name,
       src,
       text,
-      unavailable: !isPdf && !isText,
+      unavailable: !isPdf && !text,
       openLabel: isPdf ? 'Open PDF' : 'Open file',
     }
   } catch (err) {
@@ -404,15 +563,21 @@ watch(
   },
 )
 
+function onWindowKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && pendingDelete.value) cancelDelete()
+}
+
 onMounted(() => {
   if (!queryConversationId()) applyContext(readStoredContext(null))
   void loadDocuments()
   void loadConversations()
   const id = queryConversationId()
   if (id) void openConversation(id)
+  window.addEventListener('keydown', onWindowKey)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', onWindowKey)
   closePreview()
 })
 </script>
@@ -424,13 +589,39 @@ onUnmounted(() => {
     :active-conversation-id="conversationId"
     @select-conversation="selectConversation"
     @new-chat="startNewChat()"
+    @bookmark-conversation="toggleBookmark"
+    @delete-conversation="requestDelete"
   >
         <section class="flex h-full min-h-0 flex-col">
           <header class="shrink-0 px-6 pt-6 pb-3">
-            <h1 class="text-[1.65rem] font-extrabold tracking-tight text-slate-900">Chat with Your Career Data</h1>
-            <p class="mt-1 max-w-2xl text-sm text-slate-500">
-              Select a resume and job descriptions, then ask a question. Answers are grounded in those documents.
-            </p>
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h1 class="text-[1.65rem] font-extrabold tracking-tight text-slate-900">Chat with Your Career Data</h1>
+                <p class="mt-1 max-w-2xl text-sm text-slate-500">
+                  Select a resume and job descriptions, then ask a question. Answers are grounded in those documents.
+                </p>
+              </div>
+              <div v-if="conversationId" class="flex shrink-0 items-center gap-1">
+                <button
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-orange-300 hover:text-orange-600"
+                  :class="threadBookmarked ? 'border-orange-200 bg-orange-50 text-orange-600' : ''"
+                  type="button"
+                  :aria-pressed="threadBookmarked"
+                  @click="toggleBookmark(conversationId, !threadBookmarked)"
+                >
+                  <Bookmark class="h-3.5 w-3.5" :class="threadBookmarked ? 'fill-current' : ''" />
+                  {{ threadBookmarked ? 'Saved' : 'Save result' }}
+                </button>
+                <button
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-red-200 hover:text-red-600"
+                  type="button"
+                  @click="requestDelete(conversationId)"
+                >
+                  <Trash2 class="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              </div>
+            </div>
           </header>
 
           <div id="chat-scroll" class="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-2">
@@ -460,7 +651,12 @@ onUnmounted(() => {
                 v-for="message in messages"
                 :key="message.id"
                 :message="message"
+                :documents="documents"
+                :resume-id="selectedResumeId"
+                :job-ids="selectedJobIds"
+                :preparing="extractingTopics && extractingFromId === message.id"
                 @preview-source="previewSource"
+                @prepare-interview="prepareFromMessage"
               />
             </template>
           </div>
@@ -472,7 +668,7 @@ onUnmounted(() => {
                 :key="item"
                 class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand disabled:opacity-40"
                 type="button"
-                :disabled="sending"
+                :disabled="sending || extractingTopics"
                 @click="send(item)"
               >
                 {{ item }}
@@ -515,4 +711,45 @@ onUnmounted(() => {
     :open-label="preview?.openLabel ?? 'Open file'"
     @close="closePreview"
   />
+
+  <Teleport to="body">
+    <div
+      v-if="pendingDelete"
+      class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 p-4"
+      role="presentation"
+      @click.self="cancelDelete"
+    >
+      <div
+        class="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_24px_64px_rgba(15,23,42,0.28)]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-chat-title"
+      >
+        <h2 id="delete-chat-title" class="text-lg font-bold text-slate-900">Delete this chat?</h2>
+        <p class="mt-2 text-sm text-slate-500">
+          <span class="font-medium text-slate-800">{{ pendingDelete.title }}</span>
+          will be removed from recent chats and saved results. This cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end gap-3">
+          <button
+            class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            type="button"
+            :disabled="deletingChat"
+            @click="cancelDelete"
+          >
+            Cancel
+          </button>
+          <button
+            class="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+            type="button"
+            :disabled="deletingChat"
+            @click="confirmDeleteChat"
+          >
+            <LoaderCircle v-if="deletingChat" class="h-4 w-4 animate-spin" />
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>

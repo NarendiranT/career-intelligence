@@ -74,7 +74,7 @@ def test_home_summary_from_user_data():
         db.add(resume)
         db.add(job)
         db.add(extra_job)
-        convo = Conversation(user_id=user_id)
+        convo = Conversation(user_id=user_id, bookmarked=True)
         db.add(convo)
         db.flush()
         db.add(
@@ -100,6 +100,9 @@ def test_home_summary_from_user_data():
     assert body["stats"]["resume_count"] == 1
     assert body["stats"]["job_count"] == 2
     assert body["stats"]["insight_count"] == 1
+    assert body["stats"]["saved_result_count"] == 1
+    assert body["saved_results"][0]["title"] == "How well do I fit the Staff Engineer role?"
+    assert body["saved_results"][0]["bookmarked"] is True
     assert [doc["filename"] for doc in body["documents"]] == [
         "Ada_Resume.pdf",
         "Staff_Engineer_JD.pdf",

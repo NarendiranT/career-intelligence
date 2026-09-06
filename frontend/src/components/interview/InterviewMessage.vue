@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Copy, Sparkles, ThumbsDown, ThumbsUp } from '@lucide/vue'
+import RichText from '@/components/common/RichText.vue'
 import { showToast } from '@/composables/useToast'
 import { useAuth } from '@/composables/useAuth'
 import type { InterviewMessage } from '@/types/interview'
@@ -53,39 +54,12 @@ function copyMessage(): void {
       <Sparkles class="h-4 w-4" />
     </span>
     <div class="max-w-[92%] min-w-0 flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <p class="text-sm leading-relaxed whitespace-pre-wrap text-slate-800">{{ message.text }}</p>
-
-      <div v-if="message.table" class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-        <table class="w-full min-w-[420px] text-left text-sm">
-          <thead class="bg-slate-50 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-            <tr>
-              <th v-for="header in message.table.headers" :key="header" class="px-3 py-2">{{ header }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, index) in message.table.rows" :key="index" class="border-t border-slate-100">
-              <td v-for="(cell, cellIndex) in row" :key="cellIndex" class="px-3 py-2 text-slate-700" :class="cellIndex === 0 ? 'font-medium text-slate-800' : ''">
-                {{ cell }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="message.code" class="relative mt-4 overflow-hidden rounded-xl bg-slate-900">
-        <div class="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
-          <span class="text-[11px] font-medium tracking-wide text-slate-400 uppercase">{{ message.code.language }}</span>
-          <button
-            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/10"
-            type="button"
-            @click="copyText(message.code!.content)"
-          >
-            <Copy class="h-3 w-3" />
-            Copy
-          </button>
-        </div>
-        <pre class="overflow-x-auto p-3 text-[12px] leading-relaxed text-slate-100"><code>{{ message.code.content }}</code></pre>
-      </div>
+      <RichText
+        :text="message.text"
+        :pending="message.pending"
+        :table="message.table"
+        :code="message.code"
+      />
 
       <div class="mt-3 flex items-center justify-between">
         <div class="flex gap-2 text-slate-400">

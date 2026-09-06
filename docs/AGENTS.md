@@ -1,6 +1,6 @@
 # Career Intelligence agents
 
-The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to `POST /v1/documents`, then My Documents loads `GET /v1/documents` and listens on `WS /v1/ws/documents` for indexing status. Chat loads those documents, lists threads on `GET /v1/conversations`, and streams RAG answers on `WS /v1/ws/chat`.
+The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to `POST /v1/documents`, then My Documents loads `GET /v1/documents` and listens on `WS /v1/ws/documents` for indexing status. Chat loads those documents, lists threads on `GET /v1/conversations`, and streams RAG answers on `WS /v1/ws/chat`. Interview topics live on `GET /v1/topics`; topic chat uses the same WebSocket with `channel=interview`.
 
 ## Stack
 
@@ -10,7 +10,7 @@ The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to 
 - Hugging Face embeddings (`sentence-transformers/all-MiniLM-L6-v2`, 384-d) via `HuggingFaceEmbeddings`
 - MCP-style tools in `mcp/` (in-process callables)
 
-Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Structured LLM calls use Groq JSON schema mode (`strict=True`), not tool calling, because gpt-oss models often fail with `tool_use_failed`. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
+Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Groq on-demand gpt-oss models cap TPM at 8000 and count **prompt + declared max_tokens**; router/extraction always send a small `max_tokens`, generation caps at 1536, and RAG/indexing prompts are compacted so a single request stays under the limit. Structured LLM calls use Groq JSON schema mode (`strict=True`), not tool calling, because gpt-oss models often fail with `tool_use_failed`. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
 
 ## Setup
 
@@ -59,10 +59,12 @@ Each upload inserts a `documents` row, then runs `indexing_graph` in a FastAPI b
 3. Metadata-filtered pgvector search
 4. Build prompt
 5. Generate answer
-6. Faithfulness check (retry retrieval up to 2 times)
+6. Faithfulness check (retry retrieval up to 2 times; skipped for interview topic chat)
 7. Persist conversation + usage (one `usage_events` row per LLM call)
 
-Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner totals: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent threads) and `GET /v1/conversations/<id>` (messages).
+The graph starts at `identify_channel`. `channel=extract_topics` runs `extract_interview_topics` and exits. `channel=interview` loads the topic, then follows retrieve → generate → persist (no faithfulness). `channel=assistant` is the original path.
+
+Chat REST/SSE and `chat.done` include `{ "tokens", "prompt_tokens", "completion_tokens" }` for that turn. Owner totals: `GET /v1/usage`. Conversations: `GET /v1/conversations` (recent **assistant** threads) and `GET /v1/conversations/<id>` (messages). Interview topics: `GET /v1/topics` (`question_count` = user messages in that topic’s interview conversation).
 
 ```bash
 curl -s -X POST http://localhost:8000/v1/chat \
@@ -73,9 +75,14 @@ curl -s -X POST http://localhost:8000/v1/chat \
 
 SSE: `"stream": true` on `POST /v1/chat` yields `token` then `done` events.
 
-WebSocket chat (`WS /v1/ws/chat?token=<jwt>`): send `{ "type": "chat.ask", "question": "...", "resume_id": "<uuid>", "job_ids": ["<uuid>"], "stream": true, "temperature": 0.7, "top_p": 1, "max_tokens": 1024, "system_prompt": "...", "web_search": false, "model": "deep-research" }`. Server replies `chat.status`, then `chat.token` chunks when `stream` is true, then `chat.done` (text, citations, strengths, gaps, conversation_id, usage). Errors are `{ "type": "chat.error", "detail": "..." }`. Generation uses Chat Settings: temperature, top-p, max tokens, and system instructions (plus the grounded-answer constraint).
+WebSocket chat (`WS /v1/ws/chat?token=<jwt>`): send `{ "type": "chat.ask", "question": "...", "resume_id": "<uuid>", "job_ids": ["<uuid>"], "stream": true, "temperature": 0.7, "top_p": 1, "max_tokens": 1024, "system_prompt": "...", "web_search": false, "model": "deep-research", "channel": "assistant" }`. Server replies `chat.status`, then `chat.token` chunks when `stream` is true, then `chat.done` (text, citations, strengths, gaps, conversation_id, usage). Errors are `{ "type": "chat.error", "detail": "..." }`. Generation uses Chat Settings: temperature, top-p, max tokens, and system instructions (plus the grounded-answer constraint).
 
-Token tracking: each Groq structured call records prompt/completion tokens, model, and latency on `usage_events` (`indexing.route`, `indexing.extract_resume`, `indexing.extract_job`, `rag.query_understanding`, `rag.generate`, `rag.faithfulness`). Indexing rows store `document_id` in `extra`.
+`channel` is `assistant` (default), `interview`, or `extract_topics`:
+
+- `extract_topics`: pass the assistant answer as `question`, plus `source_conversation_id` / `source_message_id`. Creates `topics` rows and interview conversations. `chat.done` includes `topics: [{ id, label, conversation_id }]`.
+- `interview`: pass `topic_id` and the interview Chat Settings as `system_prompt`. Skips faithfulness retry. `chat.done` may include `table` and `code`.
+
+Token tracking: each Groq structured call records prompt/completion tokens, model, and latency on `usage_events` (`indexing.route`, `indexing.extract_resume`, `indexing.extract_job`, `rag.query_understanding`, `rag.generate`, `rag.faithfulness`, `rag.extract_topics`). Indexing rows store `document_id` in `extra`.
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/usage
@@ -96,4 +103,4 @@ Protected document/chat calls need the same `Authorization` header.
 
 Indexing: `create_or_update_user`, `save_resume_profile`, `save_job_profile`, `update_processing_status`, `replace_document_chunks`, `enrich_job_board` (stub).
 
-RAG: `get_user_profile`, `fetch_document_metadata`, `fetch_structured_profiles`, `save_conversation_message`, `update_usage`, `web_search` (stub).
+RAG: `get_user_profile`, `fetch_document_metadata`, `fetch_structured_profiles`, `save_conversation_message`, `get_interview_topic`, `save_interview_topics`, `update_usage`, `web_search` (stub).

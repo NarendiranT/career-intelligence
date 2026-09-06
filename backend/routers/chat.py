@@ -8,7 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from agent.rag.graph import rag_graph
-from backend.api_schemas import ChatRequest, ChatResponse, CitationOut, TokenUsageOut
+from backend.api_schemas import (
+    AnswerCodeOut,
+    AnswerTableOut,
+    ChatRequest,
+    ChatResponse,
+    CitationOut,
+    TokenUsageOut,
+    TopicOut,
+)
 from backend.deps import get_user_id
 from backend.errors import MissingLLMConfigError
 
@@ -28,11 +36,40 @@ def rag_input(user_id: UUID, body: ChatRequest) -> dict:
         "system_prompt": body.system_prompt,
         "web_search": body.web_search,
         "model": body.model,
+        "channel": body.channel,
+        "topic_id": str(body.topic_id) if body.topic_id else None,
+        "source_conversation_id": str(body.source_conversation_id) if body.source_conversation_id else None,
+        "source_message_id": str(body.source_message_id) if body.source_message_id else None,
     }
 
 
 def invoke_rag(user_id: UUID, body: ChatRequest) -> dict:
     return rag_graph.invoke(rag_input(user_id, body))
+
+
+def _table_out(raw: object) -> AnswerTableOut | None:
+    if not isinstance(raw, dict):
+        return None
+    headers = raw.get("headers") or []
+    rows = raw.get("rows") or []
+    if not isinstance(headers, list) or not isinstance(rows, list):
+        return None
+    if not headers and not rows:
+        return None
+    return AnswerTableOut(
+        headers=[str(item) for item in headers],
+        rows=[[str(cell) for cell in row] if isinstance(row, list) else [str(row)] for row in rows],
+    )
+
+
+def _code_out(raw: object) -> AnswerCodeOut | None:
+    if not isinstance(raw, dict):
+        return None
+    language = str(raw.get("language") or "")
+    content = str(raw.get("content") or "")
+    if not content:
+        return None
+    return AnswerCodeOut(language=language, content=content)
 
 
 def to_chat_response(result: dict) -> ChatResponse:
@@ -49,6 +86,12 @@ def to_chat_response(result: dict) -> ChatResponse:
         prompt_tokens=int(usage_raw.get("prompt_tokens") or 0),
         completion_tokens=int(usage_raw.get("completion_tokens") or 0),
     )
+    topics: list[TopicOut] = []
+    for item in result.get("topics") or []:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        topics.append(TopicOut.model_validate(item))
+    message_id = result.get("message_id")
     return ChatResponse(
         conversation_id=UUID(conversation_id) if conversation_id else None,
         text=answer.get("text") or result.get("error") or "",
@@ -56,6 +99,14 @@ def to_chat_response(result: dict) -> ChatResponse:
         strengths=answer.get("strengths") or [],
         gaps=answer.get("gaps") or [],
         usage=usage,
+        channel=str(result.get("channel") or "assistant"),
+        topic_id=UUID(str(result.get("topic_id"))) if result.get("topic_id") else None,
+        topics=topics,
+        table=_table_out(answer.get("table")),
+        code=_code_out(answer.get("code")),
+        validated=bool(result.get("validated")),
+        message_id=UUID(str(message_id)) if message_id else None,
+        topics_existing=bool(result.get("topics_existing")),
     )
 
 

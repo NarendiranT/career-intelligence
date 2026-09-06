@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   BarChart3,
+  Bookmark,
   Briefcase,
   CircleHelp,
   FileText,
@@ -14,13 +16,16 @@ import {
   Search,
   Settings,
   Sparkles,
+  Trash2,
   Upload,
 } from '@lucide/vue'
 import { useInterview } from '@/composables/useInterview'
 import type { ConversationSummary } from '@/types/chat'
+import { formatQuestionCount, questionCountLabel } from '@/types/interview'
 import { formatRelativeTime } from '@/utils/time'
 
 const route = useRoute()
+const router = useRouter()
 const { filteredTopics, selectedTopicId, topicQuery, selectTopic } = useInterview()
 
 const props = defineProps<{
@@ -35,7 +40,12 @@ const emit = defineEmits<{
   toggle: []
   selectConversation: [id: string]
   newChat: []
+  bookmarkConversation: [id: string, bookmarked: boolean]
+  deleteConversation: [id: string]
 }>()
+
+const savedChats = computed(() => (props.recentChats ?? []).filter((chat) => chat.bookmarked))
+const unsavedChats = computed(() => (props.recentChats ?? []).filter((chat) => !chat.bookmarked))
 
 const nav = [
   { label: 'Home', icon: Home, to: '/home', badge: null },
@@ -48,6 +58,11 @@ const nav = [
 
 function isActive(to: string | null) {
   return Boolean(to && route.path === to)
+}
+
+function chooseInterviewTopic(id: string) {
+  selectTopic(id)
+  void router.replace({ path: '/interview', query: { topic: id } })
 }
 </script>
 
@@ -133,22 +148,77 @@ function isActive(to: string | null) {
         <button
           v-for="topic in filteredTopics"
           :key="topic.id"
-          class="w-full rounded-lg px-3 py-2 text-left text-[13px]"
+          class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px]"
           :class="
             topic.id === selectedTopicId
               ? 'bg-blue-50 font-semibold text-brand'
               : 'font-medium text-slate-600 hover:bg-slate-50'
           "
           type="button"
-          @click="selectTopic(topic.id)"
+          :title="questionCountLabel(topic.question_count)"
+          @click="chooseInterviewTopic(topic.id)"
         >
-          {{ topic.label }}
+          <span class="min-w-0 flex-1 truncate">{{ topic.label }}</span>
+          <span
+            class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+            :class="
+              topic.id === selectedTopicId ? 'bg-blue-100 text-brand' : 'bg-slate-100 text-slate-500'
+            "
+            :aria-label="questionCountLabel(topic.question_count)"
+          >
+            {{ formatQuestionCount(topic.question_count) }}
+          </span>
         </button>
-        <p v-if="!filteredTopics.length" class="px-2 py-3 text-[12px] text-slate-400">No topics match.</p>
+        <p v-if="!filteredTopics.length" class="px-2 py-3 text-[12px] text-slate-400">
+          {{ topicQuery.trim() ? 'No topics match.' : 'No topics yet. Create them from a chat reply.' }}
+        </p>
       </div>
     </div>
 
     <div v-else-if="showRecentChats && !collapsed" class="mt-5 min-h-0 flex-1 overflow-y-auto px-3">
+      <section v-if="savedChats.length" class="mb-4">
+        <p class="mb-1 px-1 text-[11px] font-semibold tracking-wide text-orange-500 uppercase">Saved Results</p>
+        <button
+          v-for="chat in savedChats"
+          :key="chat.id"
+          class="group mb-1 flex w-full items-start gap-1 rounded-lg px-2 py-2 text-left"
+          :class="chat.id === props.activeConversationId ? 'bg-orange-50' : 'hover:bg-slate-50'"
+          type="button"
+          @click="emit('selectConversation', chat.id)"
+        >
+          <span class="min-w-0 flex-1">
+            <p
+              class="truncate text-[13px] font-medium"
+              :class="chat.id === props.activeConversationId ? 'text-orange-600' : 'text-slate-700'"
+            >
+              {{ chat.title }}
+            </p>
+            <p class="mt-0.5 text-[11px] text-slate-400">{{ formatRelativeTime(chat.updated_at) }}</p>
+          </span>
+          <span class="flex shrink-0 items-center gap-0.5 opacity-80 group-hover:opacity-100">
+            <span
+              class="rounded p-1 text-orange-500 hover:bg-white"
+              role="button"
+              tabindex="0"
+              aria-label="Remove bookmark"
+              @click.stop="emit('bookmarkConversation', chat.id, false)"
+              @keydown.enter.stop="emit('bookmarkConversation', chat.id, false)"
+            >
+              <Bookmark class="h-3.5 w-3.5 fill-current" />
+            </span>
+            <span
+              class="rounded p-1 text-slate-400 hover:bg-white hover:text-red-500"
+              role="button"
+              tabindex="0"
+              aria-label="Delete chat"
+              @click.stop="emit('deleteConversation', chat.id)"
+              @keydown.enter.stop="emit('deleteConversation', chat.id)"
+            >
+              <Trash2 class="h-3.5 w-3.5" />
+            </span>
+          </span>
+        </button>
+      </section>
       <div class="mb-2 flex items-center justify-between px-1">
         <p class="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Recent Chats</p>
         <button
@@ -160,22 +230,49 @@ function isActive(to: string | null) {
           New Chat
         </button>
       </div>
-      <p v-if="!props.recentChats?.length" class="px-2 py-3 text-[12px] text-slate-400">No conversations yet.</p>
+      <p v-if="!unsavedChats.length && !savedChats.length" class="px-2 py-3 text-[12px] text-slate-400">
+        No conversations yet.
+      </p>
+      <p v-else-if="!unsavedChats.length" class="px-2 py-2 text-[12px] text-slate-400">No other recent chats.</p>
       <button
-        v-for="chat in props.recentChats"
+        v-for="chat in unsavedChats"
         :key="chat.id"
-        class="mb-1 w-full rounded-lg px-3 py-2 text-left"
+        class="group mb-1 flex w-full items-start gap-1 rounded-lg px-2 py-2 text-left"
         :class="chat.id === props.activeConversationId ? 'bg-blue-50' : 'hover:bg-slate-50'"
         type="button"
         @click="emit('selectConversation', chat.id)"
       >
-        <p
-          class="truncate text-[13px] font-medium"
-          :class="chat.id === props.activeConversationId ? 'text-brand' : 'text-slate-700'"
-        >
-          {{ chat.title }}
-        </p>
-        <p class="mt-0.5 text-[11px] text-slate-400">{{ formatRelativeTime(chat.updated_at) }}</p>
+        <span class="min-w-0 flex-1">
+          <p
+            class="truncate text-[13px] font-medium"
+            :class="chat.id === props.activeConversationId ? 'text-brand' : 'text-slate-700'"
+          >
+            {{ chat.title }}
+          </p>
+          <p class="mt-0.5 text-[11px] text-slate-400">{{ formatRelativeTime(chat.updated_at) }}</p>
+        </span>
+        <span class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+          <span
+            class="rounded p-1 text-slate-400 hover:bg-white hover:text-orange-500"
+            role="button"
+            tabindex="0"
+            aria-label="Bookmark chat"
+            @click.stop="emit('bookmarkConversation', chat.id, true)"
+            @keydown.enter.stop="emit('bookmarkConversation', chat.id, true)"
+          >
+            <Bookmark class="h-3.5 w-3.5" />
+          </span>
+          <span
+            class="rounded p-1 text-slate-400 hover:bg-white hover:text-red-500"
+            role="button"
+            tabindex="0"
+            aria-label="Delete chat"
+            @click.stop="emit('deleteConversation', chat.id)"
+            @keydown.enter.stop="emit('deleteConversation', chat.id)"
+          >
+            <Trash2 class="h-3.5 w-3.5" />
+          </span>
+        </span>
       </button>
     </div>
 

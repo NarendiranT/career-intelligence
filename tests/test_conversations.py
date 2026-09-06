@@ -102,9 +102,57 @@ def test_conversations_list_and_detail():
     assert payload["messages"][1]["content"] == "You should add Kubernetes."
     assert payload["messages"][1]["citations"][0]["label"] == "resume.txt"
     assert payload["messages"][1]["extra"]["strengths"] == ["Python"]
+    assert payload["bookmarked"] is False
 
     missing = client.get(f"/v1/conversations/{foreign_id}", headers=auth_headers(token))
     assert missing.status_code == 404
     unknown = client.get(f"/v1/conversations/{uuid.uuid4()}", headers=auth_headers(token))
     assert unknown.status_code == 404
     assert client.get(f"/v1/conversations/{older_id}", headers=auth_headers(other["access_token"])).status_code == 404
+
+
+@requires_postgres
+def test_bookmark_and_delete_conversation():
+    registered = _register()
+    token = registered["access_token"]
+    user_id = uuid.UUID(registered["user"]["id"])
+    other = _register()["access_token"]
+
+    with session_scope() as db:
+        convo = Conversation(user_id=user_id)
+        db.add(convo)
+        db.flush()
+        db.add(
+            Message(
+                conversation_id=convo.id,
+                user_id=user_id,
+                role=MessageRole.user,
+                content="Save this match analysis",
+            )
+        )
+        convo_id = convo.id
+
+    saved = client.patch(
+        f"/v1/conversations/{convo_id}",
+        headers=auth_headers(token),
+        json={"bookmarked": True},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["bookmarked"] is True
+    assert saved.json()["title"] == "Save this match analysis"
+
+    listed = client.get("/v1/conversations", headers=auth_headers(token))
+    assert listed.json()[0]["id"] == str(convo_id)
+    assert listed.json()[0]["bookmarked"] is True
+
+    forbidden = client.patch(
+        f"/v1/conversations/{convo_id}",
+        headers=auth_headers(other),
+        json={"bookmarked": False},
+    )
+    assert forbidden.status_code == 404
+
+    removed = client.delete(f"/v1/conversations/{convo_id}", headers=auth_headers(token))
+    assert removed.status_code == 204
+    assert client.get(f"/v1/conversations/{convo_id}", headers=auth_headers(token)).status_code == 404
+    assert client.get("/v1/conversations", headers=auth_headers(token)).json() == []

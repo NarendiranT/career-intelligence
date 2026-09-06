@@ -184,6 +184,12 @@ def test_download_document_file(monkeypatch, tmp_path: Path, sample_resume: Path
     assert response.status_code == 200
     assert response.content == sample_resume.read_bytes()
     assert "Ada_Resume.txt" in (response.headers.get("content-disposition") or "")
+    assert response.headers.get("content-type", "").startswith("text/plain")
+
+    extracted = client.get(f"/v1/documents/{doc_id}/text", headers=auth_headers(token))
+    assert extracted.status_code == 200
+    assert extracted.json()["filename"] == "Ada_Resume.txt"
+    assert extracted.json()["text"] == sample_resume.read_text(encoding="utf-8")
 
     forbidden = client.get(f"/v1/documents/{doc_id}/file", headers=auth_headers(other))
     assert forbidden.status_code == 404

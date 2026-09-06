@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from backend.api_schemas import ConversationMessageOut, ConversationOut, CitationOut
-from backend.models import Conversation, Message, MessageRole
+from backend.models import Conversation, ConversationKind, Message, MessageRole
 
 TITLE_MAX_LEN = 80
 RECENT_CONVERSATION_LIMIT = 5
@@ -66,11 +66,20 @@ def conversation_to_out(convo: Conversation, messages: list[Message]) -> Convers
         id=convo.id,
         title=conversation_title(first_user.content if first_user else ""),
         updated_at=(last_msg.created_at if last_msg else convo.created_at),
+        bookmarked=bool(convo.bookmarked),
     )
 
 
-def list_user_conversations(db: Session, user_id: UUID, *, limit: int) -> list[ConversationOut]:
-    conversations = db.exec(select(Conversation).where(Conversation.user_id == user_id)).all()
+def _sorted_conversation_outs(
+    db: Session,
+    user_id: UUID,
+    *,
+    kind: ConversationKind | None = ConversationKind.assistant,
+) -> list[ConversationOut]:
+    stmt = select(Conversation).where(Conversation.user_id == user_id)
+    if kind is not None:
+        stmt = stmt.where(Conversation.kind == kind)
+    conversations = db.exec(stmt).all()
     grouped = _messages_by_conversation(db, [row.id for row in conversations])
     items = [conversation_to_out(row, grouped.get(row.id, [])) for row in conversations]
     epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -84,7 +93,35 @@ def list_user_conversations(db: Session, user_id: UUID, *, limit: int) -> list[C
         return stamp
 
     items.sort(key=sort_key, reverse=True)
+    return items
+
+
+def list_user_conversations(
+    db: Session,
+    user_id: UUID,
+    *,
+    limit: int,
+    bookmarked: bool | None = None,
+) -> list[ConversationOut]:
+    items = _sorted_conversation_outs(db, user_id)
+    if bookmarked is True:
+        items = [item for item in items if item.bookmarked]
+    elif bookmarked is False:
+        items = [item for item in items if not item.bookmarked]
     return items[:limit]
+
+
+def list_sidebar_conversations(db: Session, user_id: UUID, *, recent_limit: int) -> list[ConversationOut]:
+    items = _sorted_conversation_outs(db, user_id)
+    saved = [item for item in items if item.bookmarked]
+    recent = [item for item in items if not item.bookmarked][:recent_limit]
+    return saved + recent
+
+
+def set_conversation_bookmarked(convo: Conversation, bookmarked: bool) -> Conversation:
+    convo.bookmarked = bookmarked
+    convo.bookmarked_at = datetime.now(timezone.utc) if bookmarked else None
+    return convo
 
 
 def get_owned_conversation(db: Session, user_id: UUID, conversation_id: UUID) -> Conversation | None:

@@ -52,11 +52,32 @@ class Citation(BaseModel):
     label: str
 
 
+class AnswerTable(BaseModel):
+    headers: list[str] = Field(default_factory=list)
+    rows: list[list[str]] = Field(default_factory=list)
+
+
+class AnswerCode(BaseModel):
+    language: str = ""
+    content: str = ""
+
+
 class GeneratedAnswer(BaseModel):
     text: str
     citations: list[Citation] = Field(default_factory=list)
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
+    table: AnswerTable | None = None
+    code: AnswerCode | None = None
+
+
+class InterviewTopicCandidate(BaseModel):
+    label: str
+    reason: str = ""
+
+
+class InterviewTopicPlan(BaseModel):
+    topics: list[InterviewTopicCandidate] = Field(default_factory=list)
 
 
 class FaithfulnessResult(BaseModel):

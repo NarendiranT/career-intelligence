@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import relationship as sa_relationship
 from sqlmodel import Field, Relationship, SQLModel
@@ -29,6 +29,11 @@ class DocumentStatus(StrEnum):
 class MessageRole(StrEnum):
     user = "user"
     assistant = "assistant"
+
+
+class ConversationKind(StrEnum):
+    assistant = "assistant"
+    interview = "interview"
 
 
 class User(SQLModel, table=True):
@@ -196,6 +201,40 @@ class Chunk(SQLModel, table=True):
     )
 
 
+class Topic(SQLModel, table=True):
+    __tablename__ = "topics"
+    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_topics_user_slug"),)
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(PGUUID(as_uuid=True), primary_key=True),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    )
+    label: str = Field(max_length=256)
+    slug: str = Field(max_length=256)
+    source_conversation_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("conversations.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    source_message_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(PGUUID(as_uuid=True), nullable=True),
+    )
+    context: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    created_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )
+
+    user: User | None = Relationship(sa_relationship=sa_relationship("User"))
+
+
 class Conversation(SQLModel, table=True):
     __tablename__ = "conversations"
 
@@ -209,6 +248,31 @@ class Conversation(SQLModel, table=True):
     created_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )
+    bookmarked: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default="false"),
+    )
+    bookmarked_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    kind: ConversationKind = Field(
+        default=ConversationKind.assistant,
+        sa_column=Column(
+            Enum(ConversationKind, name="conversation_kind"),
+            nullable=False,
+            server_default="assistant",
+        ),
+    )
+    topic_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("topics.id", ondelete="CASCADE"),
+            nullable=True,
+            unique=True,
+        ),
     )
 
     user: User | None = Relationship(sa_relationship=sa_relationship("User"))
