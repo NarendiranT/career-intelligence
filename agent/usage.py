@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -88,6 +89,13 @@ def _message_text(raw: Any) -> str:
     return str(content or "")
 
 
+_ESCAPE_MAP = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}
+_TEXT_STOP_KEYS = ("citations", "strengths", "gaps", "table", "code", "intent", "rewritten_query")
+_STOP_AFTER_TEXT = re.compile(
+    r'"\s*(,?\s*"(?:' + "|".join(_TEXT_STOP_KEYS) + r')"\s*:|\s*}\s*$)'
+)
+
+
 def _parse_json_object(text: str) -> Any | None:
     blob = (text or "").strip()
     if blob.startswith("```"):
@@ -103,6 +111,114 @@ def _parse_json_object(text: str) -> Any | None:
         return json.loads(blob[start : end + 1])
     except json.JSONDecodeError:
         return None
+
+
+def _failed_generation_from_body(body: Any) -> str | None:
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error") if isinstance(body.get("error"), dict) else body
+    blob = error.get("failed_generation") if isinstance(error, dict) else None
+    return blob if isinstance(blob, str) and blob.strip() else None
+
+
+def failed_generation_text(exc: BaseException | None) -> str | None:
+    current: BaseException | None = exc
+    for _ in range(8):
+        if current is None:
+            break
+        blob = _failed_generation_from_body(getattr(current, "body", None))
+        if blob:
+            return blob
+        current = current.__cause__ or current.__context__
+    return None
+
+
+def recover_text_field(blob: str) -> str | None:
+    """Pull a usable `text` value out of JSON Groq rejected as invalid."""
+    match = re.search(r'"text"\s*:\s*"', blob or "")
+    if not match:
+        return None
+    i = match.end()
+    out: list[str] = []
+    while i < len(blob):
+        ch = blob[i]
+        if ch == "\\" and i + 1 < len(blob):
+            out.append(_ESCAPE_MAP.get(blob[i + 1], blob[i + 1]))
+            i += 2
+            continue
+        if ch == '"':
+            rest = blob[i:]
+            if _STOP_AFTER_TEXT.match(rest) or re.match(r'"\s*:\s*null\s*}\s*$', rest):
+                break
+            out.append('"')
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    text = "".join(out).strip()
+    return text or None
+
+
+def _prose_from_unknown_fields(data: dict[str, Any]) -> str:
+    parts: list[str] = []
+    known = set()
+    text = data.get("text")
+    if isinstance(text, str) and text.strip():
+        parts.append(text.strip())
+        known.add("text")
+    for key, value in data.items():
+        if key in known or key in {"https", "http"}:
+            continue
+        if not isinstance(key, str):
+            continue
+        if key in {"citations", "strengths", "gaps", "table", "code", "intent", "rewritten_query"}:
+            continue
+        chunk = key.strip()
+        if isinstance(value, str) and value.strip():
+            extra = value.strip()
+            if len(extra) <= 2 or extra[:1].islower():
+                chunk = f"{chunk}{extra}"
+            else:
+                chunk = f"{chunk} {extra}"
+        elif value is not None and not isinstance(value, (dict, list, bool, int, float)):
+            chunk = f"{chunk} {value}"
+        if chunk:
+            parts.append(chunk)
+    return " ".join(parts).strip()
+
+
+def coerce_to_schema(schema: type[BaseModel], data: Any) -> Any | None:
+    if isinstance(data, schema):
+        return data
+    if isinstance(data, dict):
+        payload = dict(data)
+        if "text" in schema.model_fields:
+            merged = _prose_from_unknown_fields(payload)
+            if merged:
+                payload["text"] = merged
+        try:
+            return schema.model_validate(payload)
+        except Exception:  # noqa: BLE001
+            text = payload.get("text")
+            if isinstance(text, str) and text.strip() and "text" in schema.model_fields:
+                return schema.model_validate({"text": text})
+            return None
+    if isinstance(data, str):
+        parsed = _parse_json_object(data)
+        if parsed is not None:
+            return coerce_to_schema(schema, parsed)
+        recovered = recover_text_field(data)
+        if recovered and "text" in schema.model_fields:
+            return schema.model_validate({"text": recovered})
+        return None
+    return None
+
+
+def salvage_structured(schema: type[BaseModel], exc: BaseException) -> Any | None:
+    blob = failed_generation_text(exc)
+    if not blob:
+        return None
+    return coerce_to_schema(schema, blob)
 
 
 def unwrap_structured(result: Any, schema: type[BaseModel]) -> tuple[Any, Any]:
@@ -124,14 +240,16 @@ def unwrap_structured(result: Any, schema: type[BaseModel]) -> tuple[Any, Any]:
     if isinstance(parsed, schema):
         return parsed, raw
     if parsed is not None:
-        try:
-            return schema.model_validate(parsed), raw
-        except Exception:  # noqa: BLE001
-            pass
-    recovered = _parse_json_object(_message_text(raw))
+        coerced = coerce_to_schema(schema, parsed)
+        if coerced is not None:
+            return coerced, raw
+    recovered = coerce_to_schema(schema, _message_text(raw)) if raw is not None else None
     if recovered is not None:
-        return schema.model_validate(recovered), raw
+        return recovered, raw
     if parsing_error is not None:
+        salvaged = salvage_structured(schema, parsing_error)
+        if salvaged is not None:
+            return salvaged, raw
         raise parsing_error
     raise ValueError(f"structured output for {schema.__name__} was empty")
 

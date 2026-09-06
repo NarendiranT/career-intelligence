@@ -33,6 +33,7 @@ export type InterviewMessage = {
   time: string
   text: string
   pending?: boolean
+  greeting?: boolean
   table?: InterviewTable
   code?: InterviewCodeBlock
 }

@@ -43,8 +43,9 @@ SYSTEM_PROMPT = (
 
 INTERVIEW_GROUNDING = (
     "Stay on the selected interview topic. Use the candidate resume and job context when it is present. "
-    "Populate table and code when they help explain the answer. Do not invent employers or skills "
-    "that are not in the context, but you may teach general interview concepts for this topic."
+    "Keep `text` as prose. Put comparison grids in `table` and snippets in `code` — never markdown tables "
+    "or fenced code inside `text`. Do not invent employers or skills that are not in the context, "
+    "but you may teach general interview concepts for this topic."
 )
 
 CHANNELS = frozenset({"assistant", "interview", "extract_topics"})

@@ -11,7 +11,7 @@ The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to 
 - MCP-style tools in `mcp/` (in-process callables)
 - Optional OpenTelemetry (OTLP to Collector → Jaeger traces, Prometheus metrics)
 
-Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Groq on-demand gpt-oss models cap TPM at 8000 and count **prompt + declared max_tokens**; router/extraction always send a small `max_tokens`, generation caps at 1536, and RAG/indexing prompts are compacted so a single request stays under the limit. Structured LLM calls use Groq JSON schema mode (`strict=True`), not tool calling, because gpt-oss models often fail with `tool_use_failed`. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
+Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Groq on-demand gpt-oss models cap TPM at 8000 and count **prompt + declared max_tokens**; router/extraction always send a small `max_tokens`, generation caps at 1536, and RAG/indexing prompts are compacted so a single request stays under the limit. Structured LLM calls use Groq JSON schema mode (`strict=True`), not tool calling, because gpt-oss models often fail with `tool_use_failed`. If Groq returns `json_validate_failed`, generation salvages `failed_generation` or falls back to plain text so interview answers are not dropped. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
 
 ## Setup
 

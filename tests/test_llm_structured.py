@@ -1,7 +1,7 @@
 from agent.context_budget import compact_chunks, compact_profiles, truncate_text
 from agent.llm import chat_model_kwargs, invoke_structured, invoke_structured_tracked
-from agent.schemas import QueryPlan, ResumeProfile
-from agent.usage import extract_token_usage, summarize_usage, unwrap_structured
+from agent.schemas import GeneratedAnswer, QueryPlan, ResumeProfile
+from agent.usage import extract_token_usage, salvage_structured, summarize_usage, unwrap_structured
 
 
 class _Runnable:
@@ -202,3 +202,63 @@ def test_resume_profile_coerces_unknown_skill_categories():
     assert dumped["Kafka"]["category"] == "Other Skills"
     assert dumped["GitHub Actions"]["category"] == "Cloud & DevOps"
     assert dumped["GitHub Actions"]["proficiency"] == 5
+
+
+class _AlwaysFail:
+    def __init__(self, body: dict):
+        self.body = body
+
+    def with_structured_output(self, _schema, **_kwargs):
+        body = self.body
+
+        class R:
+            def invoke(self, _messages):
+                raise _GroqJsonError(body)
+
+        return R()
+
+
+class _GroqJsonError(Exception):
+    def __init__(self, body: dict):
+        super().__init__("Error code: 400 - json_validate_failed")
+        self.body = body
+
+
+def test_salvage_broken_generated_answer_from_groq():
+    blob = (
+        '{\n  "text": "To quantify your Generative AI experience for the interview", '
+        '"frame your achievements with concrete metrics and tie them directly to the job":'
+        '"s key responsibilities. Use STAR stories.\\n\\n",'
+        '"https":null}'
+    )
+    err = _GroqJsonError({"error": {"code": "json_validate_failed", "failed_generation": blob}})
+    answer = salvage_structured(GeneratedAnswer, err)
+    assert "quantify your Generative AI experience" in answer.text
+    assert "STAR" in answer.text
+
+
+def test_invoke_structured_salvages_json_validate_failed():
+    blob = '{"text": "Lists are mutable; tuples are not.", "citations": []}'
+    model = _AlwaysFail({"error": {"failed_generation": blob}})
+    result = invoke_structured(model, GeneratedAnswer, [("human", "lists vs tuples")])
+    assert result.text.startswith("Lists are mutable")
+
+
+def test_invoke_structured_plain_text_fallback_for_answers():
+    class _FailThenPlain:
+        def with_structured_output(self, _schema, **_kwargs):
+            class R:
+                def invoke(self, _messages):
+                    raise RuntimeError("json_validate_failed")
+
+            return R()
+
+        def invoke(self, _messages):
+            class Msg:
+                content = "Keep answers short."
+                usage_metadata = {"input_tokens": 2, "output_tokens": 3, "total_tokens": 5}
+
+            return Msg()
+
+    result = invoke_structured(_FailThenPlain(), GeneratedAnswer, [("human", "tip")])
+    assert result.text == "Keep answers short."

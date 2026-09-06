@@ -79,10 +79,24 @@ function nowLabel(): string {
 function greetingForTopic(): InterviewMessageType {
   const label = selectedTopic.value?.label || 'this topic'
   return {
-    id: `a-${Date.now()}`,
+    id: 'interview-greeting',
     role: 'assistant',
     time: nowLabel(),
+    greeting: true,
     text: `Let's practice ${label}. Ask a concept question, a comparison, or a coding problem and I will answer at ${difficulty.value} difficulty.`,
+  }
+}
+
+function seedEmptyThread(): InterviewMessageType[] {
+  const topic = selectedTopic.value
+  if (!topic) return []
+  if ((topic.question_count ?? 0) > 0) return []
+  return [greetingForTopic()]
+}
+
+function dropGreeting(): void {
+  if (messages.value.some((item) => item.greeting)) {
+    messages.value = messages.value.filter((item) => !item.greeting)
   }
 }
 
@@ -109,17 +123,17 @@ async function loadThread(): Promise<void> {
   const convoId = topic?.conversation_id
   conversationId.value = convoId ?? null
   if (!convoId) {
-    messages.value = topic ? [greetingForTopic()] : []
+    messages.value = seedEmptyThread()
     return
   }
   threadLoading.value = true
   try {
     const detail = await getConversation(convoId)
     conversationId.value = detail.id
-    messages.value = detail.messages.length ? detail.messages.map(toUiMessage) : [greetingForTopic()]
+    messages.value = detail.messages.length ? detail.messages.map(toUiMessage) : seedEmptyThread()
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not load topic chat', 'error')
-    messages.value = [greetingForTopic()]
+    messages.value = seedEmptyThread()
   } finally {
     threadLoading.value = false
     scrollThread()
@@ -186,6 +200,7 @@ function send(text = draft.value): void {
     showToast('Chat is reconnecting. Try again in a moment.', 'error')
     return
   }
+  dropGreeting()
   messages.value.push({
     id: `u-${Date.now()}`,
     role: 'user',

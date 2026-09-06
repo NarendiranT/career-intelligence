@@ -163,12 +163,14 @@ class AnswerCode(BaseModel):
 
 
 class GeneratedAnswer(BaseModel):
-    text: str
+    text: str = Field(
+        description="Prose answer only. No markdown tables or fenced code. Escape double quotes."
+    )
     citations: list[Citation] = Field(default_factory=list)
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
-    table: AnswerTable | None = None
-    code: AnswerCode | None = None
+    table: AnswerTable | None = Field(default=None, description="Optional comparison grid as headers and rows.")
+    code: AnswerCode | None = Field(default=None, description="Optional code sample; keep out of text.")
 
 
 class InterviewTopicCandidate(BaseModel):

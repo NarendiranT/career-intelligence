@@ -7,7 +7,15 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from pydantic import BaseModel
 
 from agent.context_budget import EXTRACTION_MAX_TOKENS, ROUTER_MAX_TOKENS, cap_generation_max_tokens
-from agent.usage import extract_token_usage, model_name, timed_invoke, unwrap_structured
+from agent.usage import (
+    coerce_to_schema,
+    extract_token_usage,
+    model_name,
+    salvage_structured,
+    timed_invoke,
+    unwrap_structured,
+    _message_text,
+)
 from backend.config import settings
 from backend.errors import MissingLLMConfigError
 from backend.telemetry import llm_invoke_span, record_llm_usage
@@ -154,12 +162,70 @@ def invoke_structured_tracked(
             raise
         except Exception as exc:  # noqa: BLE001
             last_error = exc
-            if method == "json_mode":
-                raise
-            logger.warning("structured output %s failed; retrying with json_mode: %s", method, exc)
+            salvaged = salvage_structured(schema, exc)
+            if salvaged is not None:
+                logger.warning("structured output %s failed; salvaged failed_generation", method)
+                return salvaged, {
+                    "event_type": event_type,
+                    "model": model,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "tokens": 0,
+                    "latency_ms": 0,
+                }
+            if method != "json_mode":
+                logger.warning("structured output %s failed; retrying with json_mode: %s", method, exc)
+                continue
+            parsed = _plain_text_fallback(llm, schema, messages, event_type=event_type, model=model)
+            if parsed is not None:
+                return parsed
+            raise
     if last_error:
         raise last_error
     raise RuntimeError("structured output failed")
+
+
+def _plain_text_fallback(
+    llm: Any,
+    schema: type[BaseModel],
+    messages: list[Any],
+    *,
+    event_type: str,
+    model: str | None,
+) -> tuple[Any, dict[str, Any]] | None:
+    if "text" not in getattr(schema, "model_fields", {}):
+        return None
+    try:
+        with llm_invoke_span(event_type=event_type, model=model) as span:
+            result, latency_ms = timed_invoke(llm, _with_json_schema_hint(messages, schema))
+            tokens = extract_token_usage(result)
+            text = _message_text(result)
+            span.set_attribute("gen_ai.usage.input_tokens", tokens["input_tokens"])
+            span.set_attribute("gen_ai.usage.output_tokens", tokens["output_tokens"])
+            span.set_attribute("ci.llm.latency_ms", latency_ms)
+            record_llm_usage(
+                event_type=event_type,
+                model=model,
+                input_tokens=tokens["input_tokens"],
+                output_tokens=tokens["output_tokens"],
+                latency_ms=latency_ms,
+            )
+            parsed = coerce_to_schema(schema, text)
+            if parsed is None and text.strip():
+                parsed = schema.model_validate({"text": text.strip()})
+            if parsed is None:
+                return None
+            return parsed, {
+                "event_type": event_type,
+                "model": model,
+                "input_tokens": tokens["input_tokens"],
+                "output_tokens": tokens["output_tokens"],
+                "tokens": tokens["total_tokens"],
+                "latency_ms": latency_ms,
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("plain-text fallback failed: %s", exc)
+        return None
 
 
 def invoke_structured(llm: Any, schema: type[BaseModel], messages: list[Any]) -> Any:
