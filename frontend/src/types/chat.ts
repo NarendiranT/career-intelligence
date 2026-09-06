@@ -37,7 +37,6 @@ export type ChatAskPayload = {
   top_p?: number
   max_tokens?: number
   system_prompt?: string
-  web_search?: boolean
   model?: string
   channel?: 'assistant' | 'interview' | 'extract_topics'
   topic_id?: string | null

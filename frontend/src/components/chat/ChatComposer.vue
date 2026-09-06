@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { Globe, Paperclip, Send } from '@lucide/vue'
+import { Paperclip, Send } from '@lucide/vue'
 
 const draft = defineModel<string>('draft', { default: '' })
 const modelValue = defineModel<string>('model', { default: 'deep-research' })
-const webSearch = defineModel<boolean>('webSearch', { default: false })
 
 defineProps<{
   disabled?: boolean
@@ -35,16 +34,6 @@ defineEmits<{
         <div class="flex items-center gap-1 text-slate-400">
           <button class="rounded-lg p-2 hover:bg-slate-50" type="button" aria-label="Attach" disabled>
             <Paperclip class="h-4 w-4" />
-          </button>
-          <button
-            class="rounded-lg p-2 hover:bg-slate-50"
-            type="button"
-            :class="webSearch ? 'bg-blue-50 text-brand' : ''"
-            :aria-pressed="webSearch"
-            aria-label="Internet search"
-            @click="webSearch = !webSearch"
-          >
-            <Globe class="h-4 w-4" />
           </button>
           <select
             v-model="modelValue"

@@ -39,7 +39,6 @@ def build_registry() -> ToolRegistry:
     registry.register("list_interview_topics_for_source", rag_tools.list_interview_topics_for_source)
     registry.register("save_interview_topics", rag_tools.save_interview_topics)
     registry.register("update_usage", rag_tools.update_usage)
-    registry.register("web_search", rag_tools.web_search)
     return registry
 
 

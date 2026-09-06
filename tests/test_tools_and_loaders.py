@@ -19,7 +19,6 @@ def test_tool_registry_has_diagram_names():
         "list_interview_topics_for_source",
         "save_interview_topics",
         "update_usage",
-        "web_search",
     ):
         assert required in names
 

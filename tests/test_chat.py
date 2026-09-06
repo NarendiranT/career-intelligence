@@ -55,7 +55,6 @@ def test_chat_websocket_streams_tokens(monkeypatch):
                     "top_p": 0.8,
                     "max_tokens": 512,
                     "system_prompt": "Be concise.",
-                    "web_search": True,
                     "model": "deep-research",
                 }
             )
@@ -86,7 +85,6 @@ def test_chat_websocket_streams_tokens(monkeypatch):
     assert body.top_p == 0.8
     assert body.max_tokens == 512
     assert body.system_prompt == "Be concise."
-    assert body.web_search is True
     assert body.model == "deep-research"
     assert str(body.resume_id) == resume_id
     assert [str(i) for i in body.job_ids] == [job_id]
@@ -150,7 +148,6 @@ def test_chat_rest_passes_settings(monkeypatch):
             "question": "What skills are on my resume?",
             "stream": False,
             "temperature": 1.2,
-            "web_search": True,
             "system_prompt": "Stay grounded.",
         },
         headers=auth_headers(token),
@@ -158,7 +155,6 @@ def test_chat_rest_passes_settings(monkeypatch):
     assert response.status_code == 200
     assert ChatResponse.model_validate(response.json()).text == "OK"
     assert captured["body"].temperature == 1.2
-    assert captured["body"].web_search is True
     assert captured["body"].system_prompt == "Stay grounded."
 
 

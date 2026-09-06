@@ -50,7 +50,6 @@ const topP = ref(1)
 const maxTokens = ref(1024)
 const model = ref(ALLOWED_MODEL)
 const stream = ref(true)
-const webSearch = ref(false)
 const systemPrompt = ref(
   'You are Career Intelligence, a helpful career coach. Use the selected resume and job descriptions to give specific, actionable advice.',
 )
@@ -430,7 +429,6 @@ function send(text = draft.value): void {
     top_p: topP.value,
     max_tokens: maxTokens.value,
     system_prompt: systemPrompt.value,
-    web_search: webSearch.value,
     model: ALLOWED_MODEL,
     channel: 'assistant',
   })
@@ -472,7 +470,6 @@ function prepareFromMessage(message: ChatMessageType): void {
     top_p: topP.value,
     max_tokens: maxTokens.value,
     system_prompt: systemPrompt.value,
-    web_search: false,
     model: ALLOWED_MODEL,
     channel: 'extract_topics',
     source_conversation_id: conversationId.value,
@@ -678,7 +675,6 @@ onUnmounted(() => {
           <ChatComposer
             v-model:draft="draft"
             v-model:model="model"
-            v-model:web-search="webSearch"
             :disabled="sending"
             @send="send()"
           />

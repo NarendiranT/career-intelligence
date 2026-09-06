@@ -1,7 +1,7 @@
 from agent.context_budget import compact_chunks, compact_profiles, truncate_text
 from agent.llm import chat_model_kwargs, invoke_structured, invoke_structured_tracked
 from agent.schemas import QueryPlan, ResumeProfile
-from agent.usage import extract_token_usage, summarize_usage
+from agent.usage import extract_token_usage, summarize_usage, unwrap_structured
 
 
 class _Runnable:
@@ -148,6 +148,39 @@ def test_compact_context_stays_small():
     assert len(truncate_text("abcdef", 4)) == 4
 
 
+class _NullThenJsonMode:
+    def __init__(self):
+        self.methods: list[str] = []
+
+    def with_structured_output(self, _schema, method="function_calling", **_kwargs):
+        self.methods.append(method)
+
+        class R:
+            def invoke(self, _messages):
+                if method == "json_schema":
+                    return {"parsed": None, "raw": _UsageRaw(), "parsing_error": None}
+                return QueryPlan(intent="resume", rewritten_query="json_mode")
+
+        return R()
+
+
+def test_unwrap_structured_recovers_resume_from_raw_json():
+    class Raw:
+        content = '{"name": "Ada", "skills": ["Python"]}'
+
+    parsed, raw = unwrap_structured({"parsed": None, "raw": Raw()}, ResumeProfile)
+    assert parsed.name == "Ada"
+    assert parsed.skills[0].name == "Python"
+    assert isinstance(raw, Raw)
+
+
+def test_invoke_structured_falls_back_when_json_schema_parses_none():
+    model = _NullThenJsonMode()
+    result = invoke_structured(model, QueryPlan, [("human", "skills?")])
+    assert result.rewritten_query == "json_mode"
+    assert model.methods == ["json_schema", "json_mode"]
+
+
 def test_resume_profile_coerces_string_skills():
     profile = ResumeProfile(name="Jane Candidate", skills=["Python", "FastAPI"])
     dumped = profile.model_dump()
@@ -155,3 +188,17 @@ def test_resume_profile_coerces_string_skills():
         {"name": "Python", "category": "Other Skills", "proficiency": 3},
         {"name": "FastAPI", "category": "Other Skills", "proficiency": 3},
     ]
+
+
+def test_resume_profile_coerces_unknown_skill_categories():
+    profile = ResumeProfile(
+        name="Jane Candidate",
+        skills=[
+            {"name": "Kafka", "category": "Messaging & Async", "proficiency": 4},
+            {"name": "GitHub Actions", "category": "DevOps & CI/CD", "proficiency": 9},
+        ],
+    )
+    dumped = {item["name"]: item for item in profile.model_dump()["skills"]}
+    assert dumped["Kafka"]["category"] == "Other Skills"
+    assert dumped["GitHub Actions"]["category"] == "Cloud & DevOps"
+    assert dumped["GitHub Actions"]["proficiency"] == 5

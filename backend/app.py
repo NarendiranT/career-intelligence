@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from backend.config import settings
 from backend.db import engine
+from backend.telemetry import setup_telemetry
 from backend.errors import MissingLLMConfigError
 from backend.realtime import document_events
 from backend.routers.auth import router as auth_router
@@ -39,6 +40,7 @@ app.include_router(chat_router)
 app.include_router(conversations_router)
 app.include_router(topics_router)
 app.include_router(ws_router)
+setup_telemetry(app)
 
 
 @app.on_event("startup")

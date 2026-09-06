@@ -9,6 +9,7 @@ The Vue app uses JWT auth. Home loads `GET /v1/home`. Upload posts each file to 
 - Groq chat via LangChain `ChatGroq`: extraction/router `openai/gpt-oss-20b`, generation `openai/gpt-oss-120b`
 - Hugging Face embeddings (`sentence-transformers/all-MiniLM-L6-v2`, 384-d) via `HuggingFaceEmbeddings`
 - MCP-style tools in `mcp/` (in-process callables)
+- Optional OpenTelemetry (OTLP to Collector → Jaeger traces, Prometheus metrics)
 
 Chat roles (Groq): `EXTRACTION_MODEL` for resume/job structured extract, `ROUTER_MODEL` for document type and query intent, `GENERATION_MODEL` for answers. Groq on-demand gpt-oss models cap TPM at 8000 and count **prompt + declared max_tokens**; router/extraction always send a small `max_tokens`, generation caps at 1536, and RAG/indexing prompts are compacted so a single request stays under the limit. Structured LLM calls use Groq JSON schema mode (`strict=True`), not tool calling, because gpt-oss models often fail with `tool_use_failed`. Embeddings: any **sentence-transformers–compatible** Hugging Face model via `EMBEDDING_MODEL`; keep `EMBEDDING_DIM` in sync (MiniLM is 384).
 
@@ -27,6 +28,12 @@ uvicorn backend.app:app --reload --port 8000
 ```
 
 Identity: send `Authorization: Bearer <jwt>` from `POST /v1/auth/register` or `/v1/auth/login`. Documents and chat reject missing or invalid tokens with 401.
+
+## Observability
+
+Ops telemetry is separate from product usage (`usage_events` / `GET /v1/usage`). Set `OTEL_ENABLED=true` and keep `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` (Collector HTTP). `docker compose up -d` starts Collector (4317/4318), Jaeger (http://localhost:16686), and Prometheus (http://localhost:9090). pytest and default `uvicorn` leave OTel off.
+
+Exported signals: FastAPI + SQLAlchemy spans; `indexing.graph` / `rag.graph` parent spans; `llm.invoke` spans with `event_type`, model, and token counts; metrics `ci.llm.tokens`, `ci.llm.latency_ms`, `ci.indexing.duration_ms`, `ci.rag.duration_ms`, `ci.indexing.failures`. Do not put resume/JD text or chat questions on spans—IDs, models, event types, and token counts only.
 
 ## DeepEval goldenset
 
@@ -86,7 +93,7 @@ curl -s -X POST http://localhost:8000/v1/chat \
 
 SSE: `"stream": true` on `POST /v1/chat` yields `token` then `done` events.
 
-WebSocket chat (`WS /v1/ws/chat?token=<jwt>`): send `{ "type": "chat.ask", "question": "...", "resume_id": "<uuid>", "job_ids": ["<uuid>"], "stream": true, "temperature": 0.7, "top_p": 1, "max_tokens": 1024, "system_prompt": "...", "web_search": false, "model": "deep-research", "channel": "assistant" }`. Server replies `chat.status`, then `chat.token` chunks when `stream` is true, then `chat.done` (text, citations, strengths, gaps, conversation_id, usage). Errors are `{ "type": "chat.error", "detail": "..." }`. Generation uses Chat Settings: temperature, top-p, max tokens, and system instructions (plus the grounded-answer constraint).
+WebSocket chat (`WS /v1/ws/chat?token=<jwt>`): send `{ "type": "chat.ask", "question": "...", "resume_id": "<uuid>", "job_ids": ["<uuid>"], "stream": true, "temperature": 0.7, "top_p": 1, "max_tokens": 1024, "system_prompt": "...", "model": "deep-research", "channel": "assistant" }`. Server replies `chat.status`, then `chat.token` chunks when `stream` is true, then `chat.done` (text, citations, strengths, gaps, conversation_id, usage). Errors are `{ "type": "chat.error", "detail": "..." }`. Generation uses Chat Settings: temperature, top-p, max tokens, and system instructions (plus the grounded-answer constraint).
 
 `channel` is `assistant` (default), `interview`, or `extract_topics`:
 
@@ -119,4 +126,4 @@ Protected document/chat calls need the same `Authorization` header.
 
 Indexing: `create_or_update_user`, `save_resume_profile`, `save_job_profile`, `update_processing_status`, `replace_document_chunks`, `enrich_job_board` (stub).
 
-RAG: `get_user_profile`, `fetch_document_metadata`, `fetch_structured_profiles`, `save_conversation_message`, `get_interview_topic`, `save_interview_topics`, `update_usage`, `web_search` (stub).
+RAG: `get_user_profile`, `fetch_document_metadata`, `fetch_structured_profiles`, `save_conversation_message`, `get_interview_topic`, `save_interview_topics`, `update_usage`.

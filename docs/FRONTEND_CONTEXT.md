@@ -198,7 +198,7 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 
 - `DashboardLayout` with `show-recent-chats` and `#right` = `ChatRightPanel`.
 - Empty thread; `send()` requires a processed resume and at least one processed job, then asks the RAG agent over the chat WebSocket.
-- Chat Settings (temperature, top-p, max tokens, stream, system prompt, model) are sent with each `chat.ask`. Web search is toggled from the composer globe. Resume/JD picks are restored per conversation (`resume_id` / `job_ids` on `GET /v1/conversations/{id}` plus `localStorage`). Sources open `GET /v1/documents/{id}/file` in the sample PDF modal. Finished assistant replies have **Prepare for interview**, which sends `channel=extract_topics` and then navigates to `/interview`.
+- Chat Settings (temperature, top-p, max tokens, stream, system prompt, model) are sent with each `chat.ask`. Resume/JD picks are restored per conversation (`resume_id` / `job_ids` on `GET /v1/conversations/{id}` plus `localStorage`). Sources open `GET /v1/documents/{id}/file` in the sample PDF modal. Finished assistant replies have **Prepare for interview**, which sends `channel=extract_topics` and then navigates to `/interview`.
 - **Status:** Wired to documents list + `WS /v1/ws/chat`.
 
 ### `/interview` — `interview` — `frontend/src/views/InterviewView.vue`
@@ -280,7 +280,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`ChatMessage.vue`** — Prop: `message: ChatMessage`. User avatar uses the signed-in user’s initials (`useAuth`). Assistant: sparkle avatar, copy (clipboard + toast), thumbs up/down (local, persisted in `localStorage`). Optional `strengths` / `gaps` / `sources` (filename + icon; click opens the source file in the sample-style modal), and token usage when `usage.tokens > 0`. Shows “Thinking…” while `pending` and a caret while tokens stream.
 
-**`ChatComposer.vue`** — `v-model:draft`, `v-model:model`, `v-model:webSearch`, `disabled?`. Enter sends. Paperclip is disabled. Globe toggles internet/web search for the next ask. Model options: `deep-research` (enabled), `gpt-4o` / `claude-3.5` / `gemini-pro` (disabled). Send disabled when draft is empty or `disabled`.
+**`ChatComposer.vue`** — `v-model:draft`, `v-model:model`, `disabled?`. Enter sends. Paperclip is disabled. Model options: `deep-research` (enabled), `gpt-4o` / `claude-3.5` / `gemini-pro` (disabled). Send disabled when draft is empty or `disabled`.
 
 ### Interview
 
@@ -290,7 +290,7 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`InterviewRightPanel.vue`** — mode, style, difficulty, three checkboxes, clear chat, pro tip.
 
-**`ChatRightPanel.vue`** — `defineModel`s: `tab`, `resumeId`, `jobIds`, `temperature`, `topP`, `maxTokens`, `model`, `stream`, `systemPrompt`. Props: `documents: ApiDocument[]`, `loading?`. Emit: `ask(question: string)`. Processed resumes and jobs from `GET /v1/documents`. Tabs: Selected Documents | Chat Settings. Web search lives on the composer globe, not in settings. Extra models in the settings dropdown are disabled.
+**`ChatRightPanel.vue`** — `defineModel`s: `tab`, `resumeId`, `jobIds`, `temperature`, `topP`, `maxTokens`, `model`, `stream`, `systemPrompt`. Props: `documents: ApiDocument[]`, `loading?`. Emit: `ask(question: string)`. Processed resumes and jobs from `GET /v1/documents`. Tabs: Selected Documents | Chat Settings. Extra models in the settings dropdown are disabled.
 
 ---
 
@@ -376,7 +376,7 @@ No global store.
 - `localStorage['ci.leftSidebarCollapsed']` (`'1'` = collapsed)
 - `localStorage['ci.rightSidebarCollapsed']`
 
-Data flow is parent `ref` → child `v-model` / props. Chat settings (`temperature`, `model`, stream, web search, system prompt, top-p, max tokens) are passed into `ChatRightPanel` and `ChatComposer` (`model` only). `send()` forwards them on the chat WebSocket.
+Data flow is parent `ref` → child `v-model` / props. Chat settings (`temperature`, `model`, stream, system prompt, top-p, max tokens) are passed into `ChatRightPanel` and `ChatComposer` (`model` only). `send()` forwards them on the chat WebSocket.
 
 ---
 
@@ -436,10 +436,10 @@ See `ChatMessage` in `frontend/src/types/chat.ts` (section 13). Assistant extras
 1. Trim; ignore empty or in-flight requests.
 2. Require a processed resume and at least one processed job; otherwise toast and open the documents tab.
 3. Push user message and an empty pending assistant bubble.
-4. Send `{ type: "chat.ask", question, resume_id, job_ids, conversation_id, stream, temperature, top_p, max_tokens, system_prompt, web_search, model }` on `WS /v1/ws/chat`.
+4. Send `{ type: "chat.ask", question, resume_id, job_ids, conversation_id, stream, temperature, top_p, max_tokens, system_prompt, model }` on `WS /v1/ws/chat`.
 5. Append `chat.token.text` while streaming; apply `chat.done` text/citations/strengths/gaps/usage; toast `chat.error`.
 
-Composer globe/paperclip unused. Web search and stream toggles in Chat Settings are sent on each ask.
+Composer paperclip is unused. Stream toggle in Chat Settings is sent on each ask.
 
 ### Sessions
 
@@ -523,7 +523,7 @@ export type ChatMessage = {
 }
 ```
 
-Chat settings in `ChatView` are plain `ref`s: `temperature` (0–2), `topP` (0–1), `maxTokens` (256–4096), `model` string, `stream` boolean, `webSearch` boolean, `systemPrompt` string. They are sent on each WebSocket ask.
+Chat settings in `ChatView` are plain `ref`s: `temperature` (0–2), `topP` (0–1), `maxTokens` (256–4096), `model` string, `stream` boolean, `systemPrompt` string. They are sent on each WebSocket ask.
 
 ---
 
@@ -570,7 +570,7 @@ These work in the browser without a backend:
 - Usage: token cards, trend/donut/bar charts, latest 5 activities from `/v1/usage`, View all modal from `/v1/usage/activities`
 - Skills: merged categorized skills from `/v1/skills`; Upload Resume navigates to `/upload`
 - Upload: drag-and-drop / file picker with type and size filter; add/remove resumes and JDs; paste-text as a `.txt` file; Continue uploads then opens My Documents
-- **Chat:** copy and thumbs on assistant replies; filename sources open in the sample-style file modal; globe toggles web search; extra composer models are disabled
+- **Chat:** copy and thumbs on assistant replies; filename sources open in the sample-style file modal; extra composer models are disabled
 - Prepare for Interviews: topic list above Settings, practice/mock settings, table/code answers (local send)
 - Marketing illustration image on auth
 - Lucide icons, Inter, Tailwind brand tokens
@@ -642,10 +642,10 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 ### Chat
 
 - Create/list conversations (sidebar “Recent Chats” / “New Chat”)
-- `POST` message with: conversation id, text, `resumeId`, `jobIds[]`, settings (`model`, `temperature`, `topP`, `maxTokens`, `systemPrompt`, `stream`, `webSearch`)
+- `POST` message with: conversation id, text, `resumeId`, `jobIds[]`, settings (`model`, `temperature`, `topP`, `maxTokens`, `systemPrompt`, `stream`)
 - Streamed assistant tokens if `stream` is true (SSE or WebSocket)
 - Optional citation/sources, structured strengths/gaps (already rendered if present)
-- Attachments / web search flags if those buttons become real
+- Attachments if the paperclip button becomes real
 
 ### Interview topics (implemented)
 

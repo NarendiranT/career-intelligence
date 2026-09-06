@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import time
 import uuid
 from pathlib import Path
 from uuid import UUID
@@ -20,6 +21,7 @@ from backend.errors import MissingLLMConfigError
 from backend.models import Document, DocumentStatus, DocType
 from backend.realtime import publish_document_deleted, publish_document_status
 from backend.serializers import document_to_out
+from backend.telemetry import graph_span, mark_span_error, record_graph_duration, record_indexing_failure
 from mcp.registry import tools
 
 logger = logging.getLogger(__name__)
@@ -54,24 +56,41 @@ def _owned_document(db: Session, user_id: UUID, document_id: UUID) -> Document:
 
 
 def _run_indexing(user_id: UUID, document_id: UUID) -> None:
+    started = time.perf_counter()
+    status = "ok"
     try:
-        indexing_graph.invoke({"user_id": str(user_id), "document_id": str(document_id)})
-    except MissingLLMConfigError as exc:
-        tools.invoke(
-            "update_processing_status",
-            user_id=user_id,
-            document_id=document_id,
-            status=DocumentStatus.failed,
-            error_message=str(exc),
-        )
-    except Exception:
-        logger.exception("Indexing failed for %s", document_id)
-        tools.invoke(
-            "update_processing_status",
-            user_id=user_id,
-            document_id=document_id,
-            status=DocumentStatus.failed,
-            error_message="indexing failed",
+        with graph_span("indexing.graph", feature="documents", document_id=str(document_id)) as span:
+            try:
+                indexing_graph.invoke({"user_id": str(user_id), "document_id": str(document_id)})
+            except MissingLLMConfigError as exc:
+                status = "error"
+                mark_span_error(span, exc)
+                record_indexing_failure()
+                tools.invoke(
+                    "update_processing_status",
+                    user_id=user_id,
+                    document_id=document_id,
+                    status=DocumentStatus.failed,
+                    error_message=str(exc),
+                )
+            except Exception as exc:
+                status = "error"
+                mark_span_error(span, exc)
+                record_indexing_failure()
+                logger.exception("Indexing failed for %s", document_id)
+                tools.invoke(
+                    "update_processing_status",
+                    user_id=user_id,
+                    document_id=document_id,
+                    status=DocumentStatus.failed,
+                    error_message="indexing failed",
+                )
+    finally:
+        record_graph_duration(
+            kind="indexing",
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            feature="documents",
+            status=status,
         )
 
 

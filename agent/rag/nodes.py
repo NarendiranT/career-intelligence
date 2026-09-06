@@ -72,7 +72,6 @@ class RagState(TypedDict, total=False):
     top_p: float
     max_tokens: int
     system_prompt: str
-    web_search: bool
     model: str
     channel: str
     topic_id: str | None
@@ -647,14 +646,12 @@ def stream_and_persist(state: RagState) -> dict[str, Any]:
         conversation_id=convo_id,
         events=state.get("usage_events") or [],
         extra={
-            "web_search": bool(state.get("web_search")),
             "ui_model": state.get("model"),
             "channel": channel,
             "feature": "interview" if channel in {"interview", "extract_topics"} else "chat",
             "details": question_usage_details(state.get("question"), extract_topics=channel == "extract_topics"),
         },
     )
-    tools.invoke("web_search", query=state["question"], enabled=bool(state.get("web_search")))
     return {
         "conversation_id": str(convo_id),
         "message_id": saved_assistant.get("message_id"),

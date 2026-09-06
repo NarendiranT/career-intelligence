@@ -28,7 +28,6 @@ class ChatRequest(BaseModel):
     top_p: float = Field(default=1, ge=0, le=1)
     max_tokens: int = Field(default=1024, ge=64, le=8192)
     system_prompt: str = ""
-    web_search: bool = False
     model: str = ""
     channel: Literal["assistant", "interview", "extract_topics"] = "assistant"
     topic_id: UUID | None = None

@@ -52,21 +52,5 @@ const nextSteps = [
         </li>
       </ol>
     </section>
-
-    <section class="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-      <div class="flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-          <Shield class="h-4 w-4" />
-        </span>
-        Your data is secure
-      </div>
-      <p class="mt-3 text-[13px] leading-relaxed text-slate-500">
-        All documents are encrypted and stored securely. We do not share your data with third parties.
-      </p>
-      <a class="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand hover:underline" href="#">
-        Learn more about our privacy policy
-        <ChevronRight class="h-3.5 w-3.5" />
-      </a>
-    </section>
   </aside>
 </template>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from typing import Any
@@ -70,12 +71,69 @@ def model_name(llm: Any) -> str | None:
     return str(value)
 
 
+def _message_text(raw: Any) -> str:
+    content = getattr(raw, "content", raw)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return str(content or "")
+
+
+def _parse_json_object(text: str) -> Any | None:
+    blob = (text or "").strip()
+    if blob.startswith("```"):
+        blob = blob.strip("`")
+        if blob.startswith("json"):
+            blob = blob[4:]
+        blob = blob.strip()
+    start = blob.find("{")
+    end = blob.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        return json.loads(blob[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+
+
 def unwrap_structured(result: Any, schema: type[BaseModel]) -> tuple[Any, Any]:
-    if isinstance(result, schema):
-        return result, None
+    """Return a validated schema instance from LangChain structured output.
+
+    ``include_raw=True`` can yield ``{"parsed": None, "raw": ...}`` when Groq's
+    strict JSON schema rejects a payload that still matches our Pydantic model.
+    Treat empty parsed values as a failure so callers can retry json_mode.
+    """
+    raw = None
+    parsed = result
+    parsing_error: BaseException | None = None
     if isinstance(result, dict) and "parsed" in result:
-        return result["parsed"], result.get("raw")
-    return result, None
+        parsed = result.get("parsed")
+        raw = result.get("raw")
+        error = result.get("parsing_error")
+        if isinstance(error, BaseException):
+            parsing_error = error
+    if isinstance(parsed, schema):
+        return parsed, raw
+    if parsed is not None:
+        try:
+            return schema.model_validate(parsed), raw
+        except Exception:  # noqa: BLE001
+            pass
+    recovered = _parse_json_object(_message_text(raw))
+    if recovered is not None:
+        return schema.model_validate(recovered), raw
+    if parsing_error is not None:
+        raise parsing_error
+    raise ValueError(f"structured output for {schema.__name__} was empty")
 
 
 def summarize_usage(events: list[dict[str, Any]] | None) -> dict[str, int]:

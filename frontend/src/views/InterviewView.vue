@@ -211,7 +211,6 @@ function send(text = draft.value): void {
     top_p: 1,
     max_tokens: 1024,
     system_prompt: systemPrompt.value,
-    web_search: false,
     model: ALLOWED_MODEL,
     channel: 'interview',
     topic_id: topic.id,

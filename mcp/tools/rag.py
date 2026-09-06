@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Any
 
@@ -8,8 +7,6 @@ from sqlmodel import select
 
 from backend.db import session_scope
 from backend.models import Conversation, Document, JobProfile, Message, MessageRole, ResumeProfile, UsageEvent, User
-
-logger = logging.getLogger(__name__)
 
 
 def get_user_profile(*, user_id: uuid.UUID) -> dict[str, Any] | None:
@@ -200,10 +197,3 @@ def save_interview_topics(
             context=context or {},
         )
         return topic_payloads(db, topics)
-
-
-def web_search(*, query: str, enabled: bool = False) -> list[dict[str, Any]]:
-    if not enabled:
-        return []
-    logger.info("web_search stub skipped query=%s", query)
-    return []

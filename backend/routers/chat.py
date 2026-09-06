@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,6 +20,7 @@ from backend.api_schemas import (
 )
 from backend.deps import get_user_id
 from backend.errors import MissingLLMConfigError
+from backend.telemetry import graph_span, record_graph_duration
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
 
@@ -34,7 +36,6 @@ def rag_input(user_id: UUID, body: ChatRequest) -> dict:
         "top_p": body.top_p,
         "max_tokens": body.max_tokens,
         "system_prompt": body.system_prompt,
-        "web_search": body.web_search,
         "model": body.model,
         "channel": body.channel,
         "topic_id": str(body.topic_id) if body.topic_id else None,
@@ -44,7 +45,24 @@ def rag_input(user_id: UUID, body: ChatRequest) -> dict:
 
 
 def invoke_rag(user_id: UUID, body: ChatRequest) -> dict:
-    return rag_graph.invoke(rag_input(user_id, body))
+    started = time.perf_counter()
+    channel = body.channel or "assistant"
+    feature = "interview" if channel in {"interview", "extract_topics"} else "chat"
+    status = "ok"
+    try:
+        with graph_span("rag.graph", feature=feature, channel=channel):
+            return rag_graph.invoke(rag_input(user_id, body))
+    except Exception:
+        status = "error"
+        raise
+    finally:
+        record_graph_duration(
+            kind="rag",
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            feature=feature,
+            status=status,
+            channel=channel,
+        )
 
 
 def _table_out(raw: object) -> AnswerTableOut | None:

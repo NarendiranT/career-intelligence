@@ -10,6 +10,7 @@ from agent.context_budget import EXTRACTION_MAX_TOKENS, ROUTER_MAX_TOKENS, cap_g
 from agent.usage import extract_token_usage, model_name, timed_invoke, unwrap_structured
 from backend.config import settings
 from backend.errors import MissingLLMConfigError
+from backend.telemetry import llm_invoke_span, record_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -96,36 +97,59 @@ def invoke_structured_tracked(
         ("json_schema", {"strict": True}),
         ("json_mode", {}),
     ]
+    model = model_name(llm)
     for method, extra in attempts:
         try:
             runnable = _structured_runnable(llm, schema, method=method, **extra)
             payload = messages if method == "json_schema" else _with_json_schema_hint(messages, schema)
-            result, latency_ms = timed_invoke(runnable, payload)
-            parsed, raw = unwrap_structured(result, schema)
-            tokens = extract_token_usage(raw if raw is not None else result)
-            usage = {
-                "event_type": event_type,
-                "model": model_name(llm),
-                "input_tokens": tokens["input_tokens"],
-                "output_tokens": tokens["output_tokens"],
-                "tokens": tokens["total_tokens"],
-                "latency_ms": latency_ms,
-            }
-            return parsed, usage
+            with llm_invoke_span(event_type=event_type, model=model) as span:
+                result, latency_ms = timed_invoke(runnable, payload)
+                parsed, raw = unwrap_structured(result, schema)
+                tokens = extract_token_usage(raw if raw is not None else result)
+                usage = {
+                    "event_type": event_type,
+                    "model": model,
+                    "input_tokens": tokens["input_tokens"],
+                    "output_tokens": tokens["output_tokens"],
+                    "tokens": tokens["total_tokens"],
+                    "latency_ms": latency_ms,
+                }
+                span.set_attribute("gen_ai.usage.input_tokens", tokens["input_tokens"])
+                span.set_attribute("gen_ai.usage.output_tokens", tokens["output_tokens"])
+                span.set_attribute("ci.llm.latency_ms", latency_ms)
+                record_llm_usage(
+                    event_type=event_type,
+                    model=model,
+                    input_tokens=tokens["input_tokens"],
+                    output_tokens=tokens["output_tokens"],
+                    latency_ms=latency_ms,
+                )
+                return parsed, usage
         except TypeError as exc:
             if "method" not in str(exc) and "unexpected keyword" not in str(exc).lower():
                 raise
-            result, latency_ms = timed_invoke(llm.with_structured_output(schema), messages)
-            parsed, raw = unwrap_structured(result, schema)
-            tokens = extract_token_usage(raw if raw is not None else result)
-            return parsed, {
-                "event_type": event_type,
-                "model": model_name(llm),
-                "input_tokens": tokens["input_tokens"],
-                "output_tokens": tokens["output_tokens"],
-                "tokens": tokens["total_tokens"],
-                "latency_ms": latency_ms,
-            }
+            with llm_invoke_span(event_type=event_type, model=model) as span:
+                result, latency_ms = timed_invoke(llm.with_structured_output(schema), messages)
+                parsed, raw = unwrap_structured(result, schema)
+                tokens = extract_token_usage(raw if raw is not None else result)
+                span.set_attribute("gen_ai.usage.input_tokens", tokens["input_tokens"])
+                span.set_attribute("gen_ai.usage.output_tokens", tokens["output_tokens"])
+                span.set_attribute("ci.llm.latency_ms", latency_ms)
+                record_llm_usage(
+                    event_type=event_type,
+                    model=model,
+                    input_tokens=tokens["input_tokens"],
+                    output_tokens=tokens["output_tokens"],
+                    latency_ms=latency_ms,
+                )
+                return parsed, {
+                    "event_type": event_type,
+                    "model": model,
+                    "input_tokens": tokens["input_tokens"],
+                    "output_tokens": tokens["output_tokens"],
+                    "tokens": tokens["total_tokens"],
+                    "latency_ms": latency_ms,
+                }
         except MissingLLMConfigError:
             raise
         except Exception as exc:  # noqa: BLE001

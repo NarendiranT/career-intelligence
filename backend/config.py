@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 1440
     jwt_remember_expire_minutes: int = 60 * 24 * 30
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
+    otel_enabled: bool = False
+    otel_service_name: str = "career-intelligence-api"
+    otel_exporter_otlp_endpoint: str = "http://localhost:4318"
     embedding_dim: int = 384
     max_upload_bytes: int = 10 * 1024 * 1024
     max_question_chars: int = 8000
