@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     jwt_alg: str = "HS256"
     jwt_expire_minutes: int = 1440
     jwt_remember_expire_minutes: int = 60 * 24 * 30
+    google_client_id: str = ""
+    microsoft_client_id: str = ""
+    microsoft_tenant_id: str = "common"
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
     otel_enabled: bool = False
     otel_service_name: str = "career-intelligence-api"

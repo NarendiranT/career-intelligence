@@ -22,8 +22,8 @@ Dashboard routes plus 404 and maintenance exist. Auth, home, upload, My Document
 
 | Implemented UI | Backend wired? |
 | --- | --- |
-| Sign up | Yes (`POST /v1/auth/register`) |
-| Sign in | Yes (`POST /v1/auth/login`) |
+| Sign up | Yes (`POST /v1/auth/register`; Google/Microsoft `POST /v1/auth/oauth` when configured) |
+| Sign in | Yes (`POST /v1/auth/login`; Google/Microsoft `POST /v1/auth/oauth` when configured) |
 | Home dashboard | Yes (`GET /v1/home`) |
 | Upload documents | Yes (`POST /v1/documents` per file; Continue then `/documents`) |
 | My Documents | Yes (`GET /v1/documents` + `WS /v1/ws/documents`) |
@@ -65,7 +65,7 @@ Unauthenticated visits to dashboard URLs redirect to `/signin?next=…`.
 | Font | Inter from Google Fonts in `frontend/index.html` |
 | State | Component `ref` / `computed` / `defineModel`; module composables `useSidebar`, `useAuth`, `useToast` |
 | API client | `frontend/src/api/client.ts` (`fetch` + Bearer token) |
-| Auth | Email/password JWT: `localStorage` `ci.accessToken` when Remember me is on, otherwise `sessionStorage`; no OAuth SDK |
+| Auth | Email/password JWT plus Google GIS token popup / Microsoft MSAL ID tokens posted to `POST /v1/auth/oauth` |
 | WebSocket / SSE | Document status WebSocket (`useDocumentRealtime`); chat RAG WebSocket (`useChatRealtime`) |
 | Tests | **None** in `frontend/` |
 
@@ -130,7 +130,7 @@ career-intelligence/
 | `frontend/src/components/interview/` | Interview messages, composer, right settings panel |
 | `frontend/src/components/skills/` | Skills right column (legend, insights, activity) |
 | `frontend/src/types/` | Auth, home, documents, upload, chat, interview, usage, and skills TypeScript types |
-| `frontend/src/composables/` | `useSidebar`, `useAuth`, `useToast`, `useInterview`, `useDocumentRealtime`, `useChatRealtime` |
+| `frontend/src/composables/` | `useSidebar`, `useAuth`, `useSocialAuth`, `useToast`, `useInterview`, `useDocumentRealtime`, `useChatRealtime` |
 | `frontend/public/` | Static assets: `/favicon.svg`, `/samples/*.pdf` |
 
 `App.vue` mounts `AppToasts` (top-of-viewport notifications) and `<RouterView />`.
@@ -265,13 +265,13 @@ No props. Bell (decorative red dot) and the authenticated user’s name/initials
 
 **`CareerFlowIllustration.vue`** — Image only.
 
-**`SignupForm.vue`** — Local refs plus `pending` / `serverError`. Password regex: 8+ chars, letter, digit, symbol. Calls `useAuth().register`. Google/Microsoft `SocialButton`s are disabled (“Coming soon”). Terms checkbox required; Terms of Service and Privacy Policy open `/terms` and `/privacy` in a new tab.
+**`SignupForm.vue`** — Local refs plus `pending` / `serverError`. Password regex: 8+ chars, letter, digit, symbol. Calls `useAuth().register`. The terms checkbox sits above Google/Microsoft. Social signup does **not** validate name/email/password; it only requires terms, then `useAuth().loginWithOAuth`. Google/Microsoft buttons enable from `GET /v1/auth/oauth/config` (non-empty API client IDs). Terms of Service and Privacy Policy open `/terms` and `/privacy` in a new tab.
 
-**`SigninForm.vue`** — `email`, `password`, `remember`, plus `pending` / `serverError`. Calls `useAuth().login`; `remember` maps to a 30-day JWT, `localStorage` token storage, and saved email (`ci.rememberEmail`). Unchecked uses a 1-day JWT in `sessionStorage` and clears the saved email.
+**`SigninForm.vue`** — `email`, `password`, `remember`, plus `pending` / `serverError`. Calls `useAuth().login`; `remember` maps to a 30-day JWT, `localStorage` token storage, and saved email (`ci.rememberEmail`). Unchecked uses a 1-day JWT in `sessionStorage` and clears the saved email. Social sign-in uses the same remember flag.
 
 **`FormInput.vue`** — Props: `label`, `modelValue`, `placeholder?`, `type?`, `autocomplete?`, `hint?`, `error?`. Slots: `icon`, `action`.
 
-**`SocialButton.vue`** — Props: `provider: 'google' | 'microsoft'`, `label`, `disabled?`. No OAuth handler.
+**`SocialButton.vue`** — Props: `provider: 'google' | 'microsoft'`, `label`, `disabled?`. Emits `click`. Disabled title is “Coming soon”.
 
 ### Usage
 
@@ -347,7 +347,7 @@ JWT Bearer tokens from FastAPI. Token key: `ci.accessToken`. Session state: `use
 | --- | --- |
 | Sign up | Client validation, then `POST /v1/auth/register`. Token + user stored in `localStorage`; navigate to `next` or `/home`. |
 | Sign in | Non-empty email/password, then `POST /v1/auth/login` with `remember`. Remember me: 30-day JWT + `localStorage` + saved email. Otherwise: 1-day JWT + `sessionStorage`. |
-| Social | Disabled; title “Coming soon”. |
+| Social | Google GIS / Microsoft MSAL popup using client IDs from `GET /v1/auth/oauth/config`, then `POST /v1/auth/oauth`. Buttons stay disabled until the matching API client ID is set. |
 | Logout | Top-bar menu; `POST /v1/auth/logout` (stateless 204) and clear token from both storages. |
 | Protected routes | Dashboard routes require a valid session; guest routes bounce authenticated users to `/home`. |
 | Tokens | JWT in `localStorage` or `sessionStorage`; `Authorization: Bearer` on authenticated `fetch`. |
@@ -601,7 +601,6 @@ These work in the browser without a backend:
 
 **Auth**
 
-- Google/Microsoft OAuth not implemented (buttons disabled)
 - Forgot password is `#`
 - No refresh-token rotation; session JWT is `localStorage` or `sessionStorage` depending on Remember me
 
@@ -635,7 +634,8 @@ Auth is implemented on the API. Upload and chat UI still imply more than the fro
 ### Auth (implemented)
 
 - `POST /v1/auth/register`, `POST /v1/auth/login`, `GET /v1/auth/me`, `POST /v1/auth/logout`
-- Not implemented: Google/Microsoft OAuth, password reset
+- `GET /v1/auth/oauth/config`, `POST /v1/auth/oauth` (Google/Microsoft ID tokens)
+- Not implemented: password reset
 
 ### Home (implemented)
 

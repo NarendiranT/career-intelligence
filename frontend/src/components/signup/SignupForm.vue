@@ -4,12 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { Eye, EyeOff, Lock, Mail, User } from '@lucide/vue'
 import { ApiError } from '@/api/client'
 import { safeNextPath, useAuth } from '@/composables/useAuth'
+import { useSocialAuth } from '@/composables/useSocialAuth'
+import type { OAuthProvider } from '@/types/auth'
 import FormInput from './FormInput.vue'
 import SocialButton from './SocialButton.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { register } = useAuth()
+const { register, loginWithOAuth } = useAuth()
+const { googleEnabled, microsoftEnabled, requestIdToken } = useSocialAuth()
 
 const fullName = ref('')
 const email = ref('')
@@ -19,8 +22,13 @@ const agreed = ref(false)
 const showPassword = ref(false)
 const showConfirm = ref(false)
 const submitted = ref(false)
+const termsAttempted = ref(false)
 const pending = ref(false)
 const serverError = ref('')
+
+const termsError = computed(() =>
+  (submitted.value || termsAttempted.value) && !agreed.value ? 'Please accept the terms to continue.' : '',
+)
 
 const passwordHint = 'Minimum 8 characters with letters, numbers and a symbol'
 
@@ -46,6 +54,27 @@ async function onSubmit() {
     pending.value = false
   }
 }
+
+async function onSocial(provider: OAuthProvider) {
+  serverError.value = ''
+  termsAttempted.value = true
+  if (!agreed.value) {
+    return
+  }
+  pending.value = true
+  try {
+    const idToken = await requestIdToken(provider)
+    await loginWithOAuth(provider, idToken, true)
+    await router.replace(safeNextPath(route.query.next))
+  } catch (error) {
+    if (error instanceof Error && /cancelled/i.test(error.message)) {
+      return
+    }
+    serverError.value = error instanceof ApiError ? error.message : 'Could not continue with social sign-up.'
+  } finally {
+    pending.value = false
+  }
+}
 </script>
 
 <template>
@@ -62,9 +91,48 @@ async function onSubmit() {
           Join Career Intelligence and take the next step in your career journey.
         </p>
 
-        <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SocialButton provider="google" label="Sign up with Google" disabled />
-          <SocialButton provider="microsoft" label="Sign up with Microsoft" disabled />
+        <label class="mt-6 flex items-start gap-2.5 text-[13px] text-slate-600">
+          <input
+            v-model="agreed"
+            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+            type="checkbox"
+          />
+          <span>
+            I agree to the
+            <RouterLink
+              class="font-medium text-brand hover:underline"
+              to="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Terms of Service
+            </RouterLink>
+            and
+            <RouterLink
+              class="font-medium text-brand hover:underline"
+              to="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy Policy
+            </RouterLink>
+          </span>
+        </label>
+        <p v-if="termsError" class="mt-1 text-xs text-red-500">{{ termsError }}</p>
+
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <SocialButton
+            provider="google"
+            label="Sign up with Google"
+            :disabled="!googleEnabled || pending"
+            @click="onSocial('google')"
+          />
+          <SocialButton
+            provider="microsoft"
+            label="Sign up with Microsoft"
+            :disabled="!microsoftEnabled || pending"
+            @click="onSocial('microsoft')"
+          />
         </div>
 
         <div class="my-6 flex items-center gap-3">
@@ -147,35 +215,6 @@ async function onSubmit() {
               </button>
             </template>
           </FormInput>
-
-          <label class="flex items-start gap-2.5 pt-1 text-[13px] text-slate-600">
-            <input
-              v-model="agreed"
-              class="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-              type="checkbox"
-            />
-            <span>
-              I agree to the
-              <RouterLink
-                class="font-medium text-brand hover:underline"
-                to="/terms"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Terms of Service
-              </RouterLink>
-              and
-              <RouterLink
-                class="font-medium text-brand hover:underline"
-                to="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Privacy Policy
-              </RouterLink>
-            </span>
-          </label>
-          <p v-if="submitted && !agreed" class="text-xs text-red-500">Please accept the terms to continue.</p>
 
           <p v-if="serverError" class="text-sm text-red-500">{{ serverError }}</p>
 

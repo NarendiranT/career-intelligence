@@ -5,12 +5,15 @@ import { Eye, EyeOff, Lock, Mail } from '@lucide/vue'
 import { ApiError } from '@/api/client'
 import { readRememberedEmail, writeRememberedEmail } from '@/api/token'
 import { safeNextPath, useAuth } from '@/composables/useAuth'
+import { useSocialAuth } from '@/composables/useSocialAuth'
+import type { OAuthProvider } from '@/types/auth'
 import FormInput from '@/components/signup/FormInput.vue'
 import SocialButton from '@/components/signup/SocialButton.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { login } = useAuth()
+const { login, loginWithOAuth } = useAuth()
+const { googleEnabled, microsoftEnabled, requestIdToken } = useSocialAuth()
 
 const email = ref(readRememberedEmail())
 const password = ref('')
@@ -37,6 +40,24 @@ async function onSubmit() {
     pending.value = false
   }
 }
+
+async function onSocial(provider: OAuthProvider) {
+  serverError.value = ''
+  pending.value = true
+  try {
+    const idToken = await requestIdToken(provider)
+    await loginWithOAuth(provider, idToken, remember.value)
+    writeRememberedEmail(remember.value ? email.value : null)
+    await router.replace(safeNextPath(route.query.next))
+  } catch (error) {
+    if (error instanceof Error && /cancelled/i.test(error.message)) {
+      return
+    }
+    serverError.value = error instanceof ApiError ? error.message : 'Could not continue with social sign-in.'
+  } finally {
+    pending.value = false
+  }
+}
 </script>
 
 <template>
@@ -54,8 +75,18 @@ async function onSubmit() {
         </p>
 
         <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SocialButton provider="google" label="Sign in with Google" disabled />
-          <SocialButton provider="microsoft" label="Sign in with Microsoft" disabled />
+          <SocialButton
+            provider="google"
+            label="Sign in with Google"
+            :disabled="!googleEnabled || pending"
+            @click="onSocial('google')"
+          />
+          <SocialButton
+            provider="microsoft"
+            label="Sign in with Microsoft"
+            :disabled="!microsoftEnabled || pending"
+            @click="onSocial('microsoft')"
+          />
         </div>
 
         <div class="my-6 flex items-center gap-3">

@@ -1,8 +1,8 @@
 import { computed, ref } from 'vue'
-import { fetchMe, loginAccount, logoutAccount, registerAccount } from '@/api/auth'
+import { fetchMe, loginAccount, logoutAccount, oauthAccount, registerAccount } from '@/api/auth'
 import { setUnauthorizedHandler } from '@/api/client'
 import { clearToken, readToken, writeToken } from '@/api/token'
-import type { AuthUser } from '@/types/auth'
+import type { AuthUser, OAuthProvider } from '@/types/auth'
 
 const token = ref<string | null>(null)
 const user = ref<AuthUser | null>(null)
@@ -82,6 +82,15 @@ export function useAuth() {
     applySession(result.access_token, result.user, remember)
   }
 
+  async function loginWithOAuth(provider: OAuthProvider, idToken: string, remember: boolean): Promise<void> {
+    const result = await oauthAccount({
+      provider,
+      id_token: idToken,
+      remember,
+    })
+    applySession(result.access_token, result.user, remember)
+  }
+
   async function logout(): Promise<void> {
     try {
       await logoutAccount()
@@ -100,6 +109,7 @@ export function useAuth() {
     initials,
     register,
     login,
+    loginWithOAuth,
     logout,
   }
 }

@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from uuid import UUID, uuid4
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +13,7 @@ from sqlmodel import Session, select
 from backend.db import get_db
 from backend.deps import get_user_id
 from backend.models import User
+from backend.oauth import OAuthError, oauth_config, verify_oauth_id_token
 from backend.security import PASSWORD_PATTERN, create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -43,6 +46,19 @@ class LoginRequest(BaseModel):
     remember: bool = False
 
 
+class OAuthRequest(BaseModel):
+    provider: Literal["google", "microsoft"]
+    id_token: str = Field(min_length=1, max_length=8192)
+    remember: bool = False
+
+
+class OAuthConfigOut(BaseModel):
+    google: bool
+    microsoft: bool
+    google_client_id: str = ""
+    microsoft_client_id: str = ""
+
+
 class UserOut(BaseModel):
     id: UUID
     email: str
@@ -64,6 +80,44 @@ def _token_response(user: User, remember: bool = False) -> TokenResponse:
         access_token=create_access_token(user_id=user.id, email=user.email, remember=remember),
         user=_user_out(user),
     )
+
+
+@router.get("/oauth/config", response_model=OAuthConfigOut)
+def oauth_providers() -> OAuthConfigOut:
+    return OAuthConfigOut(**oauth_config())
+
+
+@router.post("/oauth", response_model=TokenResponse)
+def oauth_login(body: OAuthRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    try:
+        identity = verify_oauth_id_token(body.provider, body.id_token)
+    except OAuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    user = db.exec(select(User).where(User.email == identity.email)).first()
+    if user is None:
+        user = User(
+            id=uuid4(),
+            email=identity.email,
+            full_name=identity.full_name,
+            password_hash=None,
+        )
+        db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            user = db.exec(select(User).where(User.email == identity.email)).first()
+            if user is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not create account.")
+        else:
+            db.refresh(user)
+    elif not (user.full_name or "").strip() and identity.full_name:
+        user.full_name = identity.full_name
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return _token_response(user, remember=body.remember)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

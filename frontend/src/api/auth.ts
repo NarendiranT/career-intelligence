@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { AuthUser, LoginPayload, RegisterPayload, TokenResponse } from '@/types/auth'
+import type { AuthUser, LoginPayload, OAuthConfig, OAuthPayload, RegisterPayload, TokenResponse } from '@/types/auth'
 
 export function registerAccount(payload: RegisterPayload): Promise<TokenResponse> {
   return apiFetch<TokenResponse>('/v1/auth/register', {
@@ -23,4 +23,16 @@ export function fetchMe(): Promise<AuthUser> {
 
 export function logoutAccount(): Promise<void> {
   return apiFetch<void>('/v1/auth/logout', { method: 'POST', skipAuth: true })
+}
+
+export function fetchOAuthConfig(): Promise<OAuthConfig> {
+  return apiFetch<OAuthConfig>('/v1/auth/oauth/config', { skipAuth: true })
+}
+
+export function oauthAccount(payload: OAuthPayload): Promise<TokenResponse> {
+  return apiFetch<TokenResponse>('/v1/auth/oauth', {
+    method: 'POST',
+    json: payload,
+    skipAuth: true,
+  })
 }

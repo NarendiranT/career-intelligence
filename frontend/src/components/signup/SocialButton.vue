@@ -4,6 +4,10 @@ defineProps<{
   label: string
   disabled?: boolean
 }>()
+
+defineEmits<{
+  click: []
+}>()
 </script>
 
 <template>
@@ -12,6 +16,7 @@ defineProps<{
     type="button"
     :disabled="disabled"
     :title="disabled ? 'Coming soon' : undefined"
+    @click="$emit('click')"
   >
     <svg v-if="provider === 'google'" class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
       <path
