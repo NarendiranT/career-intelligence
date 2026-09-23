@@ -134,4 +134,4 @@ Protected document/chat calls need the same `Authorization` header.
 
 Indexing: `create_or_update_user`, `save_resume_profile`, `save_job_profile`, `update_processing_status`, `replace_document_chunks`, `enrich_job_board` (stub).
 
-RAG: `get_user_profile`, `fetch_document_metadata`, `fetch_structured_profiles`, `save_conversation_message`, `get_interview_topic`, `save_interview_topics`, `update_usage`.
+RAG: `fetch_document_metadata`, `fetch_structured_profiles`, `save_conversation_message`, `get_interview_topic`, `save_interview_topics`, `update_usage`.

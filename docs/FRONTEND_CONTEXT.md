@@ -239,7 +239,7 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 - Left sidebar **Interview Topics** sit **above** Settings / Help (not below them). Topics come from `GET /v1/topics` via `useInterview()`. Each topic shows a practiced-question count (user interview messages), capped at **99+**. Active topic is synced to `?topic=`.
 - Main: topic title, Change Topic menu, empty state that points back to chat when the user has no topics. Messages load from the topic’s interview conversation. A local greeting is seeded when `question_count` is 0. Assistant replies render markdown tables/code via `RichText`.
 - Right: Practice / Mock, response style, difficulty, Include code / follow-ups / best practices, Clear Chat. Those settings compile into `system_prompt` on each `chat.ask`; temperature follows difficulty. **Clear Chat** deletes the topic conversation’s messages (`DELETE /v1/conversations/{id}/messages`), empties the thread, and resets the sidebar question count to 0.
-- `DELETE /v1/topics/{id}` exists in `frontend/src/api/topics.ts` but is **not** used in the UI yet.
+- `DELETE /v1/topics/{id}` exists on the API but has no UI.
 - **Status:** Wired to `GET /v1/topics` + `WS /v1/ws/chat` (`channel=interview`, `topic_id`).
 
 ### `/terms` — `terms` — `frontend/src/views/LegalView.vue`
@@ -399,8 +399,7 @@ Authenticated home calls `GET /v1/home` via `frontend/src/api/home.ts`. Usage ca
 
 ### Endpoints the UI would need (not called today)
 
-- Password reset (Forgot password is still `#`)
-- `DELETE /v1/topics/{id}` (client helper exists, no UI)
+- `DELETE /v1/topics/{id}` (API exists, no UI)
 - Chat thumbs feedback (localStorage only)
 
 See section 18 for the implemented contract.
@@ -673,7 +672,6 @@ These are implemented in the Vue app (auth and data features need the API runnin
 
 **Auth**
 
-- Forgot password is `#`
 - No refresh-token rotation; session JWT is `localStorage` or `sessionStorage` depending on Remember me
 
 **Navigation**
@@ -695,7 +693,7 @@ These are implemented in the Vue app (auth and data features need the API runnin
 
 **Interview**
 
-- No UI to delete a topic (`deleteTopic` in `api/topics.ts` is unused)
+- No UI to delete a topic (`DELETE /v1/topics/{id}` exists on the API)
 
 **Repo**
 
@@ -711,7 +709,7 @@ Auth, documents, chat, topics, usage, and skills are implemented on the API. Gap
 
 - `POST /v1/auth/register`, `POST /v1/auth/login`, `GET /v1/auth/me`, `POST /v1/auth/logout`
 - `GET /v1/auth/oauth/config`, `POST /v1/auth/oauth` (Google/Microsoft ID tokens)
-- Not implemented: password reset
+- `POST /v1/auth/forgot-password`, `POST /v1/auth/reset-password`
 
 ### Home (implemented)
 
@@ -750,7 +748,7 @@ Auth, documents, chat, topics, usage, and skills are implemented on the API. Gap
 
 - `GET /v1/topics` — owner topics with `conversation_id` and `question_count` (user messages in that interview thread)
 - `GET /v1/topics/{id}` — same plus context / resume / jobs
-- `DELETE /v1/topics/{id}` — API + client helper; no UI yet
+- `DELETE /v1/topics/{id}` — API exists; no UI yet
 - `DELETE /v1/conversations/{id}/messages` — Clear Chat on Prepare for Interviews (and reusable for assistant threads); conversation row stays, messages and `question_count` reset
 - Sidebar and Change Topic menu display the count as `0`–`99` or `99+`
 

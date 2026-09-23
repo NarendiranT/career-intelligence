@@ -6,7 +6,6 @@ import type { AuthUser, OAuthProvider } from '@/types/auth'
 
 const token = ref<string | null>(null)
 const user = ref<AuthUser | null>(null)
-const bootstrapped = ref(false)
 
 let bootPromise: Promise<void> | null = null
 let unauthorizedBound = false
@@ -41,10 +40,8 @@ export function bootstrapAuth(): Promise<void> {
           clearSession()
         }
       }
-      bootstrapped.value = true
     })().catch(() => {
       clearSession()
-      bootstrapped.value = true
     })
   }
   return bootPromise
@@ -103,7 +100,6 @@ export function useAuth() {
   return {
     token,
     user,
-    bootstrapped,
     isAuthenticated,
     displayName,
     initials,

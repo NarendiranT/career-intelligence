@@ -2,7 +2,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 
 from pgvector.psycopg import register_vector
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlmodel import Session, create_engine
 
 from backend.config import settings
@@ -31,8 +31,3 @@ def session_scope() -> Generator[Session, None, None]:
         raise
     finally:
         session.close()
-
-
-def ensure_vector_extension() -> None:
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))

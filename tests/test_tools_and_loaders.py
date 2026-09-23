@@ -12,7 +12,6 @@ def test_tool_registry_has_diagram_names():
         "save_job_profile",
         "update_processing_status",
         "enrich_job_board",
-        "get_user_profile",
         "fetch_document_metadata",
         "save_conversation_message",
         "get_interview_topic",
