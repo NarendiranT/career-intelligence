@@ -142,6 +142,9 @@ async function onSocial(provider: OAuthProvider) {
               />
               Remember me
             </label>
+            <RouterLink class="font-medium text-brand hover:text-brand-dark" to="/forgot-password">
+              Forgot password?
+            </RouterLink>
           </div>
 
           <p v-if="serverError" class="text-sm text-red-500">{{ serverError }}</p>

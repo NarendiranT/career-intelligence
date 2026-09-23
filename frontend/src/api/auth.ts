@@ -17,6 +17,22 @@ export function loginAccount(payload: LoginPayload): Promise<TokenResponse> {
   })
 }
 
+export function requestPasswordReset(email: string): Promise<void> {
+  return apiFetch<void>('/v1/auth/forgot-password', {
+    method: 'POST',
+    json: { email: email.trim() },
+    skipAuth: true,
+  })
+}
+
+export function resetPassword(token: string, password: string): Promise<void> {
+  return apiFetch<void>('/v1/auth/reset-password', {
+    method: 'POST',
+    json: { token, password },
+    skipAuth: true,
+  })
+}
+
 export function fetchMe(): Promise<AuthUser> {
   return apiFetch<AuthUser>('/v1/auth/me')
 }

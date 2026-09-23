@@ -157,7 +157,7 @@ career-intelligence/
 
 Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to `Career Intelligence — ${meta.title}`.
 
-`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`. Public legal pages (no auth, no guest bounce): `/terms`, `/privacy`. Protected: `/home`, `/upload`, `/documents`, `/usage`, `/skills`, `/chat`, `/interview`. `/analysis` redirects to `/usage`. Session presence is `ci.accessToken` in `localStorage` (Remember me) or `sessionStorage` (this browser session). Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
+`beforeEach` starts `bootstrapAuth()` (`GET /v1/auth/me` if a token exists) without blocking on the network, unless `VITE_DOWNTIME` is on. Guest routes: `/`, `/signin`, `/forgot-password`. Public legal pages (no auth, no guest bounce): `/terms`, `/privacy`, `/reset-password`. Protected: `/home`, `/upload`, `/documents`, `/usage`, `/skills`, `/chat`, `/interview`. `/analysis` redirects to `/usage`. Session presence is `ci.accessToken` in `localStorage` (Remember me) or `sessionStorage` (this browser session). Unknown paths hit `NotFoundView`. When `VITE_DOWNTIME` is `true`/`1`/`yes`/`on`, **every** URL redirects to `/maintenance`.
 
 ### `/` — `signup` — `frontend/src/views/SignupView.vue`
 
@@ -170,7 +170,17 @@ Defined in `frontend/src/router/index.ts`. `afterEach` sets `document.title` to 
 
 - Same marketing panel + `SigninForm`.
 - **Remember me:** checked login stores the JWT in `localStorage` and a 30-day token (`remember: true`). Unchecked stores the JWT in `sessionStorage` and a 1-day token. The email is restored from `localStorage` `ci.rememberEmail` when the box was previously checked.
-- **Status:** Validates then `POST /v1/auth/login`. Forgot-password is `href="#"`.
+- **Status:** Validates then `POST /v1/auth/login`. **Forgot password?** goes to `/forgot-password`.
+
+### `/forgot-password` — `forgot-password` — `frontend/src/views/ForgotPasswordView.vue`
+
+- Same marketing panel. Guest-only.
+- **Status:** `POST /v1/auth/forgot-password` then a generic “check your email” message (no email enumeration).
+
+### `/reset-password` — `reset-password` — `frontend/src/views/ResetPasswordView.vue`
+
+- Reads `?token=`. Missing token shows an invalid-link state.
+- **Status:** `POST /v1/auth/reset-password` then redirects to `/signin`.
 
 ### `/home` — `home` — `frontend/src/views/HomeView.vue`
 
@@ -640,7 +650,7 @@ Node 22 types are in `devDependencies` (`@types/node`). Vite only picks up `VITE
 
 These are implemented in the Vue app (auth and data features need the API running):
 
-- Sign-up and sign-in layouts, field validation, password visibility, JWT register/login, Remember me (persistent vs session token + saved email), route guards, logout
+- Sign-up and sign-in layouts, field validation, password visibility, JWT register/login, Remember me (persistent vs session token + saved email), route guards, logout, forgot/reset password
 - Simple Terms of Service (`/terms`) and Privacy Policy (`/privacy`) linked from the sign-up checkbox
 - Document title updates per route
 - Dashboard shell: fixed left nav, top bar, inner scrolling, collapsible left/right sidebars with persistence

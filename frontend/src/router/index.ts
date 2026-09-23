@@ -4,6 +4,8 @@ import { bootstrapAuth, safeNextPath, useAuth } from '@/composables/useAuth'
 import { isDowntime } from '@/config/env'
 import SignupView from '@/views/SignupView.vue'
 import SigninView from '@/views/SigninView.vue'
+import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
+import ResetPasswordView from '@/views/ResetPasswordView.vue'
 import HomeView from '@/views/HomeView.vue'
 import UploadView from '@/views/UploadView.vue'
 import DocumentsView from '@/views/DocumentsView.vue'
@@ -29,6 +31,8 @@ const router = createRouter({
     { path: '/', name: 'signup', component: SignupView, meta: { title: 'Create Account', guest: true } },
     { path: '/signup', redirect: '/' },
     { path: '/signin', name: 'signin', component: SigninView, meta: { title: 'Sign In', guest: true } },
+    { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView, meta: { title: 'Forgot Password', guest: true } },
+    { path: '/reset-password', name: 'reset-password', component: ResetPasswordView, meta: { title: 'Reset Password' } },
     { path: '/terms', name: 'terms', component: LegalView, meta: { title: 'Terms of Service' } },
     { path: '/privacy', name: 'privacy', component: LegalView, meta: { title: 'Privacy Policy' } },
     { path: '/home', name: 'home', component: HomeView, meta: { title: 'Home', requiresAuth: true } },

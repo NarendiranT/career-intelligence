@@ -37,6 +37,8 @@ def test_openapi_includes_agent_routes():
     assert "/v1/chat" in paths
     assert "/v1/auth/register" in paths
     assert "/v1/auth/login" in paths
+    assert "/v1/auth/forgot-password" in paths
+    assert "/v1/auth/reset-password" in paths
     assert "/v1/auth/me" in paths
     assert "/v1/home" in paths
     assert "/health" in paths

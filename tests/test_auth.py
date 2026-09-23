@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import app
@@ -110,6 +111,65 @@ def test_remember_me_issues_longer_lived_token():
 def test_logout_is_noop():
     response = client.post("/v1/auth/logout")
     assert response.status_code == 204
+
+
+def test_reset_token_is_not_access_token():
+    import jwt
+
+    from backend.security import create_reset_token, decode_access_token
+
+    token = create_reset_token(user_id=uuid.uuid4(), email="ada@example.com", password_hash="x")
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_access_token(token)
+
+
+@requires_postgres
+def test_forgot_password_always_204():
+    known = f"{uuid.uuid4()}@example.com"
+    _register(email=known)
+    known_resp = client.post("/v1/auth/forgot-password", json={"email": known})
+    unknown_resp = client.post("/v1/auth/forgot-password", json={"email": f"{uuid.uuid4()}@example.com"})
+    assert known_resp.status_code == 204
+    assert unknown_resp.status_code == 204
+
+
+@requires_postgres
+def test_reset_password_updates_login():
+    from sqlmodel import select
+
+    from backend.db import session_scope
+    from backend.models import User
+    from backend.security import create_reset_token
+
+    email = f"{uuid.uuid4()}@example.com"
+    registered = _register(email=email)
+    with session_scope() as db:
+        user = db.exec(select(User).where(User.email == email)).first()
+        assert user is not None
+        token = create_reset_token(user_id=user.id, email=user.email, password_hash=user.password_hash)
+    new_password = "N3w-pass!"
+    reset = client.post("/v1/auth/reset-password", json={"token": token, "password": new_password})
+    assert reset.status_code == 204
+    old_login = client.post("/v1/auth/login", json={"email": email, "password": TEST_PASSWORD})
+    assert old_login.status_code == 401
+    new_login = client.post("/v1/auth/login", json={"email": email, "password": new_password})
+    assert new_login.status_code == 200
+    assert new_login.json()["user"]["id"] == registered["user"]["id"]
+    reuse = client.post("/v1/auth/reset-password", json={"token": token, "password": "Anoth3r!"})
+    assert reuse.status_code == 400
+
+
+@requires_postgres
+def test_reset_rejects_access_token():
+    registered = _register()
+    response = client.post(
+        "/v1/auth/reset-password",
+        json={"token": registered["access_token"], "password": "N3w-pass!"},
+    )
+    assert response.status_code == 400
+    me = client.get("/v1/auth/me", headers=auth_headers(registered["access_token"]))
+    assert me.status_code == 200
+
 
 
 def test_register_rejects_weak_password():

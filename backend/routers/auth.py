@@ -1,22 +1,35 @@
 from __future__ import annotations
 
+import logging
 import re
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from typing import Literal
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from backend.config import settings
 from backend.db import get_db
 from backend.deps import get_user_id
 from backend.models import User
 from backend.oauth import OAuthError, oauth_config, verify_oauth_id_token
-from backend.security import PASSWORD_PATTERN, create_access_token, hash_password, verify_password
+from backend.security import (
+    PASSWORD_PATTERN,
+    create_access_token,
+    create_reset_token,
+    decode_reset_token,
+    hash_password,
+    password_fingerprint,
+    verify_password,
+)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class RegisterRequest(BaseModel):
@@ -44,6 +57,22 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
     remember: bool = False
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=4096)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def password_rules(cls, value: str) -> str:
+        if not re.match(PASSWORD_PATTERN, value):
+            raise ValueError("Password must be at least 8 characters with letters, a number, and a symbol.")
+        return value
 
 
 class OAuthRequest(BaseModel):
@@ -146,6 +175,34 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     if user is None or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
     return _token_response(user, remember=body.remember)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)) -> Response:
+    email = str(body.email).strip().lower()
+    user = db.exec(select(User).where(User.email == email)).first()
+    if user is not None:
+        token = create_reset_token(user_id=user.id, email=user.email, password_hash=user.password_hash)
+        origin = settings.cors_origin_list[0] if settings.cors_origin_list else "http://localhost:5173"
+        logger.info("Password reset for %s: %s/reset-password?token=%s", email, origin, quote(token))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)) -> Response:
+    try:
+        payload = decode_reset_token(body.token)
+        user_id = UUID(str(payload["sub"]))
+    except (jwt.PyJWTError, KeyError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link.") from exc
+
+    user = db.get(User, user_id)
+    if user is None or password_fingerprint(user.password_hash) != payload.get("pwd"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link.")
+    user.password_hash = hash_password(body.password)
+    db.add(user)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserOut)
