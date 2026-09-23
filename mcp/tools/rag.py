@@ -6,22 +6,7 @@ from typing import Any
 from sqlmodel import select
 
 from backend.db import session_scope
-from backend.models import Conversation, Document, JobProfile, Message, MessageRole, ResumeProfile, UsageEvent, User
-
-
-def get_user_profile(*, user_id: uuid.UUID) -> dict[str, Any] | None:
-    with session_scope() as db:
-        user = db.get(User, user_id)
-        if user is None:
-            return None
-        resume_count = db.exec(select(ResumeProfile).where(ResumeProfile.user_id == user_id)).all()
-        job_count = db.exec(select(JobProfile).where(JobProfile.user_id == user_id)).all()
-        return {
-            "id": str(user.id),
-            "email": user.email,
-            "resume_count": len(resume_count),
-            "job_count": len(job_count),
-        }
+from backend.models import Conversation, Document, JobProfile, Message, MessageRole, ResumeProfile, UsageEvent
 
 
 def fetch_structured_profiles(*, user_id: uuid.UUID, document_ids: list[uuid.UUID]) -> dict[str, Any]:

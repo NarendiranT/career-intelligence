@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Paperclip, Send } from '@lucide/vue'
+import { Send } from '@lucide/vue'
 
 const draft = defineModel<string>('draft', { default: '' })
 const modelValue = defineModel<string>('model', { default: 'deep-research' })

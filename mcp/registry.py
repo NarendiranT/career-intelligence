@@ -31,7 +31,6 @@ def build_registry() -> ToolRegistry:
     registry.register("update_processing_status", indexing_tools.update_processing_status)
     registry.register("replace_document_chunks", indexing_tools.replace_document_chunks)
     registry.register("enrich_job_board", indexing_tools.enrich_job_board)
-    registry.register("get_user_profile", rag_tools.get_user_profile)
     registry.register("fetch_document_metadata", rag_tools.fetch_document_metadata)
     registry.register("fetch_structured_profiles", rag_tools.fetch_structured_profiles)
     registry.register("save_conversation_message", rag_tools.save_conversation_message)

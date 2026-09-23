@@ -11,12 +11,6 @@ export type InterviewTopic = {
   question_count?: number
 }
 
-export type InterviewTopicDetail = InterviewTopic & {
-  context?: Record<string, unknown> | null
-  resume_id?: string | null
-  job_ids?: string[]
-}
-
 export type InterviewTable = {
   headers: string[]
   rows: string[][]

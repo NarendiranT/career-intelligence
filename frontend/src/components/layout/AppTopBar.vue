@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, ChevronDown } from '@lucide/vue'
+import { ChevronDown } from '@lucide/vue'
 import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()

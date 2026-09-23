@@ -1,7 +1,5 @@
 import type { ApiDocument } from './document'
 
-export type { DocumentStatus } from './document'
-
 export type HomeDocument = ApiDocument
 
 export type HomeConversation = {

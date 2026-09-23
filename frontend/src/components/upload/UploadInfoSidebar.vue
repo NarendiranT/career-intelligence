@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ChevronRight, Lightbulb, Shield, Target } from '@lucide/vue'
+import { Check, Lightbulb, Target } from '@lucide/vue'
 
 const tips = [
   'Use the most recent version of your resume',
